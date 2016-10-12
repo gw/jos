@@ -192,6 +192,9 @@ cga_putc(int c)
 	}
 
 	// What is the purpose of this?
+	// Scrolls the screen up by 1 line when we fill it.
+	// Works by copying all but the topmost line of the crt_buffer into the
+	// crt_buffer, and adding an empty line at the end.
 	if (crt_pos >= CRT_SIZE) {
 		int i;
 
