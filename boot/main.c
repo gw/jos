@@ -122,4 +122,3 @@ readsect(void *dst, uint32_t offset)
 	// read a sector
 	insl(0x1F0, dst, SECTSIZE/4);
 }
-
