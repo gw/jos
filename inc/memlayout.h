@@ -89,8 +89,8 @@
 // At IOPHYSMEM (640K) there is a 384K hole for I/O.  From the kernel,
 // IOPHYSMEM can be addressed at KERNBASE + IOPHYSMEM.  The hole ends
 // at physical address EXTPHYSMEM.
-#define IOPHYSMEM	0x0A0000
-#define EXTPHYSMEM	0x100000
+#define IOPHYSMEM	0x0A0000  // Start of the "io hole", 0x0A0000 (640k) to 0x100000 (1mb)
+#define EXTPHYSMEM 0x100000  // Start of "extended" memory
 
 // Kernel stack.
 #define KSTACKTOP	KERNBASE
@@ -174,14 +174,19 @@ extern volatile pde_t uvpd[];     // VA of current page directory
  */
 struct PageInfo {
 	// Next page on the free list.
-	struct PageInfo *pp_link;
+	struct PageInfo *pp_link;  // 4 bytes
 
 	// pp_ref is the count of pointers (usually in page table entries)
 	// to this page, for pages allocated using page_alloc.
 	// Pages allocated at boot time using pmap.c's
 	// boot_alloc do not have valid reference count fields.
 
-	uint16_t pp_ref;
+	uint16_t pp_ref;  // 2 bytes
+
+	// Plus 2 bytes of implied padding to hit stride address and ensure
+	// that two instances of PageInfo can be next to each other and
+	// both be self-aligned on 4-byte boundaries (as dictated by the
+	// largest  scalar member of PageInfo, pp_link, which is 4 bytes).
 };
 
 #endif /* !__ASSEMBLER__ */
