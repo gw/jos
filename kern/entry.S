@@ -4,16 +4,16 @@
 #include <inc/memlayout.h>
 #include <inc/trap.h>
 
-# Shift Right Logical 
+# Shift Right Logical
 #define SRL(val, shamt)		(((val) >> (shamt)) & ~(-1 << (32 - (shamt))))
 
 
 ###################################################################
-# The kernel (this code) is linked at address ~(KERNBASE + 1 Meg), 
+# The kernel (this code) is linked at address ~(KERNBASE + 1 Meg),
 # but the bootloader loads it at address ~1 Meg.
-#	
+#
 # RELOC(x) maps a symbol x from its link address to its actual
-# location in physical memory (its load address).	 
+# location in physical memory (its load address).
 ###################################################################
 
 #define	RELOC(x) ((x) - KERNBASE)
@@ -63,11 +63,13 @@ entry:
 	movl	%eax, %cr0
 
 	# Now paging is enabled, but we're still running at a low EIP
-	# (why is this okay?).  Jump up above KERNBASE before entering
-	# C code.
+	# (why is this okay? Because we mapped low address in entry_pgdir too. If we
+	# hadn't done that we'd crash while trying to fetch the instruction on line 68).
+	# Jump up above KERNBASE before entering C code.
 	mov	$relocated, %eax
 	jmp	*%eax
 relocated:
+	# Now we're executing from high virtual addresses.
 
 	# Clear the frame pointer register (EBP)
 	# so that once we get into debugging C code,
@@ -92,6 +94,5 @@ spin:	jmp	spin
 	.globl		bootstack
 bootstack:
 	.space		KSTKSIZE
-	.globl		bootstacktop   
+	.globl		bootstacktop
 bootstacktop:
-

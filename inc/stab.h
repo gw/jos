@@ -40,6 +40,7 @@
 #define	N_LENG		0xfe	// length of preceding entry
 
 // Entries in the STABS table are formatted as follows.
+// Inspect the STABS table for a binary with `objdump -G`
 struct Stab {
 	uint32_t n_strx;	// index into string table of name
 	uint8_t n_type;         // type of symbol
