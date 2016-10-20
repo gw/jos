@@ -26,6 +26,9 @@
 // To construct a linear address la from PDX(la), PTX(la), and PGOFF(la),
 // use PGADDR(PDX(la), PTX(la), PGOFF(la)).
 
+// Great overview of Page Table and Entry structure:
+// https://pdos.csail.mit.edu/6.828/2016/readings/i386/s05_02.htm
+
 /* Get PFA from a linear address , aka 20 highest bits, for indexing into
  * the pages array.
  */
