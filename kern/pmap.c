@@ -121,7 +121,9 @@ boot_alloc(uint32_t n)
 // From UTOP to ULIM, the user is allowed to read but not write.
 // Above ULIM the user cannot read or write.
 
-// Set by mem_init
+/* Data structures set by mem_init */
+
+// Paging data structures
 pde_t *kern_pgdir;		// Addr of start of kernel's initial page directory
 struct PageInfo *pages;		// Physical page state array
 // This shouldn't be called a list; it's
@@ -129,6 +131,9 @@ struct PageInfo *pages;		// Physical page state array
 // struct, and PageInfo.pp_link points to the
 // next free PageInfo struct.
 static struct PageInfo *page_free_list;
+
+// Env data structures
+extern struct Env *envs;
 
 void
 mem_init(void)
@@ -166,7 +171,7 @@ mem_init(void)
 
 	//////////////////////////////////////////////////////////////////////
 	// Make 'envs' point to an array of size 'NENV' of 'struct Env'.
-	// LAB 3: Your code here.
+	envs = (struct Env *)boot_alloc(NENV * sizeof(struct Env));
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
@@ -203,7 +208,13 @@ mem_init(void)
 	// Permissions:
 	//    - the new image at UENVS  -- kernel R, user R
 	//    - envs itself -- kernel RW, user NONE
-	// LAB 3: Your code here.
+	boot_map_region(
+		kern_pgdir,
+		UENVS,
+		PTSIZE,
+		PADDR(envs),
+		PTE_U
+	);
 
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
