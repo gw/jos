@@ -26,29 +26,46 @@
 // To construct a linear address la from PDX(la), PTX(la), and PGOFF(la),
 // use PGADDR(PDX(la), PTX(la), PGOFF(la)).
 
-// page number field of address
+// Great overview of Page Table and Entry structure:
+// https://pdos.csail.mit.edu/6.828/2016/readings/i386/s05_02.htm
+
+/* Get PFA from a linear address , aka 20 highest bits, for indexing into
+ * the pages array.
+ */
 #define PGNUM(la)	(((uintptr_t) (la)) >> PTXSHIFT)
 
-// page directory index
+/* Get PD index from linear address, aka 10 highest bits in a linear address
+ *
+ * Shift right 22 and mask with 0x3FF (0011 1111 1111) to get 10 lowest bits
+ * Not sure why mask is necessary. Work around sign-extending?
+ */
 #define PDX(la)		((((uintptr_t) (la)) >> PDXSHIFT) & 0x3FF)
 
-// page table index
+/* Get PT index from linear address, aka 10 middle bits in a linear address
+ *
+ * Shift right 12 and mask with 0x3FF (0011 1111 1111) to get 10 lowest bits
+ */
 #define PTX(la)		((((uintptr_t) (la)) >> PTXSHIFT) & 0x3FF)
 
-// offset in page
+/* Get page offset from linear address, aka 12 lowest bits in a linear address
+ */
 #define PGOFF(la)	(((uintptr_t) (la)) & 0xFFF)
 
-// construct linear address from indexes and offset
+/* Construct linear address given a PD index, PT index, and offset into page.
+ */
 #define PGADDR(d, t, o)	((void*) ((d) << PDXSHIFT | (t) << PTXSHIFT | (o)))
 
 // Page directory and page table constants.
+// 1024 is 2^10 aka number of entries addressable by 10 bits
 #define NPDENTRIES	1024		// page directory entries per page directory
 #define NPTENTRIES	1024		// page table entries per page table
 
 #define PGSIZE		4096		// bytes mapped by a page
 #define PGSHIFT		12		// log2(PGSIZE)
 
-#define PTSIZE		(PGSIZE*NPTENTRIES) // bytes mapped by a page directory entry
+// Num bytes mapped by 1 page directory entry, or 1 entire page table.
+// 1024 * 4096 = 4mb
+#define PTSIZE		(PGSIZE*NPTENTRIES)
 #define PTSHIFT		22		// log2(PTSIZE)
 
 #define PTXSHIFT	12		// offset of PTX in a linear address
@@ -72,7 +89,8 @@
 // Flags in PTE_SYSCALL may be used in system calls.  (Others may not.)
 #define PTE_SYSCALL	(PTE_AVAIL | PTE_P | PTE_W | PTE_U)
 
-// Address in page table or page directory entry
+// Address in page table or page directory entry. Masks in the 20 highest
+// bits.
 #define PTE_ADDR(pte)	((physaddr_t) (pte) & ~0xFFF)
 
 // Control Register flags

@@ -1,4 +1,7 @@
 # Lab 1
+
+[Lab page](https://pdos.csail.mit.edu/6.828/2016/labs/lab1/)
+
 ## Part 3: The Kernel
 ### Formatted Printing to the Console
 >5. In the following code, what is going to be printed after 'y='? (note: the answer is not a specific value.) Why does this happen? `cprintf("x=%d y=%d", 3);`
