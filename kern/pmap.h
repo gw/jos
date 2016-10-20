@@ -67,12 +67,16 @@ void	page_decref(struct PageInfo *pp);
 
 void	tlb_invalidate(pde_t *pgdir, void *va);
 
-/* PageInfo* -> PA of start of page frame (in physical memory)
+/* PageInfo* -> PFA of the page it corresponds to
  *
  * Get pointer's offset from start of pages array and shift left 12, converting
  * the lowest 20 bits of the offset into the top 20 bits of the physical address
  * (aka the PFN), with 12 low-order zeros for the index into the page, resulting
  * in the PA of the start of the page frame in physical memory.
+ *
+ * TODO Seems like this would only work if the pages array started at 0 in
+ * physical memory, right? The PFA of the first element in pages would end up
+ * being 0?
  */
 static inline physaddr_t
 page2pa(struct PageInfo *pp)
@@ -89,8 +93,8 @@ page2pa(struct PageInfo *pp)
 
 /* PA -> PageInfo*
  *
- * Get PFN from a given PA, and use that to index into the pages array. i.e.
- * the PageInfo struct for a given PFN is at pages[PFN].
+ * Get PFA from a given PA, and use that to index into the pages array. i.e.
+ * the PageInfo struct for a given PFA is at pages[pa >> 12].
  */
 static inline struct PageInfo*
 pa2page(physaddr_t pa)

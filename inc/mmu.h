@@ -26,7 +26,8 @@
 // To construct a linear address la from PDX(la), PTX(la), and PGOFF(la),
 // use PGADDR(PDX(la), PTX(la), PGOFF(la)).
 
-/* Get VPN/PFN from a linear/physical address , aka 20 highest bits
+/* Get PFA from a linear address , aka 20 highest bits, for indexing into
+ * the pages array.
  */
 #define PGNUM(la)	(((uintptr_t) (la)) >> PTXSHIFT)
 
@@ -85,7 +86,8 @@
 // Flags in PTE_SYSCALL may be used in system calls.  (Others may not.)
 #define PTE_SYSCALL	(PTE_AVAIL | PTE_P | PTE_W | PTE_U)
 
-// Address in page table or page directory entry
+// Address in page table or page directory entry. Masks in the 20 highest
+// bits.
 #define PTE_ADDR(pte)	((physaddr_t) (pte) & ~0xFFF)
 
 // Control Register flags
