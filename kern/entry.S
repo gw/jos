@@ -63,7 +63,7 @@ entry:
 
 	# Now paging is enabled, but we're still running at a low EIP
 	# (why is this okay? Because we mapped low address in entry_pgdir too. If we
-	# hadn't done that we'd crash while trying to fetch the pa for line 68).
+	# hadn't done that we'd crash while trying to fetch the instruction on line 68).
 	# Jump up above KERNBASE before entering C code.
 	mov	$relocated, %eax
 	jmp	*%eax

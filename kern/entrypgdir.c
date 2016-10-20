@@ -22,6 +22,9 @@ pde_t entry_pgdir[NPDENTRIES] = {
 	// Map both directory indexes to the physical address
 	// of entry_pgtable below.
 	// Map VA's [0, 4MB) to PA's [0, 4MB)
+	// The whole point of this low->low mapping is to allow
+	// the fetching of the two instructions in entry.S right
+	// before that jump to `.relocated`.
 	[0] = ((uintptr_t)entry_pgtable - KERNBASE) + PTE_P,
 	// Map VA's [KERNBASE, KERNBASE+4MB) to PA's [0, 4MB)
 	[PDX(KERNBASE)] = ((uintptr_t)entry_pgtable - KERNBASE) + PTE_P + PTE_W

@@ -174,18 +174,23 @@ mem_init(void)
 	check_page_free_list(1);
 	check_page_alloc();
 	check_page();
-	panic("mem_init: This function is not finished\n");
 
 	//////////////////////////////////////////////////////////////////////
 	// Now we set up virtual memory
 
 	//////////////////////////////////////////////////////////////////////
-	// Map 'pages' read-only by the user at linear address UPAGES
+	// Map 'pages' as read-only by the user at linear address UPAGES
 	// Permissions:
 	//    - the new image at UPAGES -- kernel R, user R
 	//      (ie. perm = PTE_U | PTE_P)
 	//    - pages itself -- kernel RW, user NONE
-	// Your code goes here:
+	boot_map_region(
+		kern_pgdir,
+		UPAGES,
+		PTSIZE,
+		PADDR(pages),
+		PTE_U
+	);
 
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
@@ -197,7 +202,13 @@ mem_init(void)
 	//       the kernel overflows its stack, it will fault rather than
 	//       overwrite memory.  Known as a "guard page".
 	//     Permissions: kernel RW, user NONE
-	// Your code goes here:
+	boot_map_region(
+		kern_pgdir,
+		KSTACKTOP-KSTKSIZE,
+		KSTKSIZE,
+		PADDR(bootstack),
+		PTE_W
+	);
 
 	//////////////////////////////////////////////////////////////////////
 	// Map all of physical memory at KERNBASE.
@@ -206,7 +217,16 @@ mem_init(void)
 	// We might not have 2^32 - KERNBASE bytes of physical memory, but
 	// we just set up the mapping anyway.
 	// Permissions: kernel RW, user NONE
-	// Your code goes here:
+	boot_map_region(
+		kern_pgdir,
+		KERNBASE,
+		// 2's complement of KERNBASE is 0x10000000,
+		// b/c, when added to KERNBASE (0xf0000000)
+		// you get 0x100000000, or 2^32.
+		-KERNBASE,
+		0x0,
+		PTE_W
+	);
 
 	// Check that the initial page directory has been set up correctly.
 	check_kern_pgdir();
@@ -427,7 +447,8 @@ boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm
 	pte_t *pte_p;
 
 	while (size) {
-		// Get pointer to 2nd-level PTE
+		// Get pointer to 2nd-level PTE, allocating
+		// if necessary.
 		pte_p = pgdir_walk(pgdir, (void *)va, 1);
 
 		// pa is already page-aligned,
