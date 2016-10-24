@@ -132,9 +132,6 @@ struct PageInfo *pages;		// Physical page state array
 // next free PageInfo struct.
 static struct PageInfo *page_free_list;
 
-// Env data structures
-extern struct Env *envs;
-
 void
 mem_init(void)
 {
@@ -171,6 +168,7 @@ mem_init(void)
 
 	//////////////////////////////////////////////////////////////////////
 	// Make 'envs' point to an array of size 'NENV' of 'struct Env'.
+	// envs is extern'd in kern/env.h
 	envs = (struct Env *)boot_alloc(NENV * sizeof(struct Env));
 
 	//////////////////////////////////////////////////////////////////////
