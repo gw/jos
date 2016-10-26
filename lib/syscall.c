@@ -9,7 +9,7 @@ syscall(int num, int check, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 	int32_t ret;
 
 	// Generic system call: pass system call number in AX,
-	// up to five parameters in DX, CX, BX, DI, SI.
+	// up to five parameters in DX, CX, BX, DI, SI.  TODO Aren't these 16-bit regs?
 	// Interrupt kernel with T_SYSCALL.
 	//
 	// The "volatile" tells the assembler not to optimize
@@ -60,4 +60,3 @@ sys_getenvid(void)
 {
 	 return syscall(SYS_getenvid, 0, 0, 0, 0, 0, 0);
 }
-

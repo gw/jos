@@ -19,5 +19,6 @@ void th16(void);
 void th17(void);
 void th18(void);
 void th19(void);
+void th48(void);
 
 #endif  // TRAP_ENTRY_H

@@ -71,7 +71,7 @@ trap_init(void)
 	SETGATE(idt[T_DIVIDE], 0, GD_KT, th0, 0);
 	SETGATE(idt[T_DEBUG], 0, GD_KT, th1, 0);
 	SETGATE(idt[T_NMI], 0, GD_KT, th2, 0);
-	SETGATE(idt[T_BRKPT], 0, GD_KT, th3, 0);
+	SETGATE(idt[T_BRKPT], 0, GD_KT, th3, 3);  // User
 	SETGATE(idt[T_OFLOW], 0, GD_KT, th4, 0);
 	SETGATE(idt[T_BOUND], 0, GD_KT, th5, 0);
 	SETGATE(idt[T_ILLOP], 0, GD_KT, th6, 0);
@@ -86,6 +86,10 @@ trap_init(void)
 	SETGATE(idt[T_ALIGN], 0, GD_KT, th17, 0);
 	SETGATE(idt[T_MCHK], 0, GD_KT, th18, 0);
 	SETGATE(idt[T_SIMDERR], 0, GD_KT, th19, 0);
+	// User. Interrupt 0x30 cannot be generated
+	// by hardware so there's no ambiguity in
+	// allowing user code to trigger it.
+	SETGATE(idt[T_SYSCALL], 0, GD_KT, th48, 3);
 
 	// Per-CPU setup
 	trap_init_percpu();
@@ -162,8 +166,26 @@ print_regs(struct PushRegs *regs)
 static void
 trap_dispatch(struct Trapframe *tf)
 {
-	// Handle processor exceptions.
-	// LAB 3: Your code here.
+	switch (tf->tf_trapno) {
+		case T_PGFLT:  // Page Fault
+			page_fault_handler(tf);
+			return;
+
+		case T_BRKPT:  // Breakpoint
+			monitor(tf);
+			return;
+
+		case T_SYSCALL:  // Syscall
+			tf->tf_regs.reg_eax = syscall(
+				tf->tf_regs.reg_eax,
+				tf->tf_regs.reg_edx,
+				tf->tf_regs.reg_ecx,
+				tf->tf_regs.reg_ebx,
+				tf->tf_regs.reg_edi,
+				tf->tf_regs.reg_esi
+			);
+			return;
+	}
 
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);
@@ -187,7 +209,7 @@ trap(struct Trapframe *tf)
 	// the interrupt path.
 	assert(!(read_eflags() & FL_IF));
 
-	cprintf("Incoming TRAP frame at %p\n", tf);
+	cprintf("Incoming TRAP frame at %p, trapno %d\n", tf, tf->tf_trapno);
 
 	if ((tf->tf_cs & 3) == 3) {
 		// Trapped from user mode.
