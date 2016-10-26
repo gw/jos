@@ -32,7 +32,7 @@ struct Proghdr {
 	uint32_t p_va;      // Segment's virtual address
 	uint32_t p_pa;			// Segment's physical address, if relevant
 	uint32_t p_filesz;  // Segment's size (bytes) in binary. May be 0.
-	uint32_t p_memsz;   // Segment's desired final size in RAM (>= filesz). May be 0.
+	uint32_t p_memsz;   // Segment's desired final size in RAM (>= filesz). May be 0. If > than filesz, indicates that the bytes between filesz and memsz should be allocated and initialized to 0 (.bss segment)
 	uint32_t p_flags;
 	uint32_t p_align;
 };

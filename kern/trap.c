@@ -4,6 +4,7 @@
 
 #include <kern/pmap.h>
 #include <kern/trap.h>
+#include <kern/trapentry.h>
 #include <kern/console.h>
 #include <kern/monitor.h>
 #include <kern/env.h>
@@ -64,9 +65,29 @@ trap_init(void)
 {
 	extern struct Segdesc gdt[];
 
-	// LAB 3: Your code here.
+	// th* are declare in trapentry.h
+	// and defined via TRAPHANDLER in
+	// trapentry.S
+	SETGATE(idt[T_DIVIDE], 0, GD_KT, th0, 0);
+	SETGATE(idt[T_DEBUG], 0, GD_KT, th1, 0);
+	SETGATE(idt[T_NMI], 0, GD_KT, th2, 0);
+	SETGATE(idt[T_BRKPT], 0, GD_KT, th3, 0);
+	SETGATE(idt[T_OFLOW], 0, GD_KT, th4, 0);
+	SETGATE(idt[T_BOUND], 0, GD_KT, th5, 0);
+	SETGATE(idt[T_ILLOP], 0, GD_KT, th6, 0);
+	SETGATE(idt[T_DEVICE], 0, GD_KT, th7, 0);
+	SETGATE(idt[T_DBLFLT], 0, GD_KT, th8, 0);
+	SETGATE(idt[T_TSS], 0, GD_KT, th10, 0);
+	SETGATE(idt[T_SEGNP], 0, GD_KT, th11, 0);
+	SETGATE(idt[T_STACK], 0, GD_KT, th12, 0);
+	SETGATE(idt[T_GPFLT], 0, GD_KT, th13, 0);
+	SETGATE(idt[T_PGFLT], 0, GD_KT, th14, 0);
+	SETGATE(idt[T_FPERR], 0, GD_KT, th16, 0);
+	SETGATE(idt[T_ALIGN], 0, GD_KT, th17, 0);
+	SETGATE(idt[T_MCHK], 0, GD_KT, th18, 0);
+	SETGATE(idt[T_SIMDERR], 0, GD_KT, th19, 0);
 
-	// Per-CPU setup 
+	// Per-CPU setup
 	trap_init_percpu();
 }
 
@@ -214,4 +235,3 @@ page_fault_handler(struct Trapframe *tf)
 	print_trapframe(tf);
 	env_destroy(curenv);
 }
-

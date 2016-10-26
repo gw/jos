@@ -43,13 +43,40 @@
 
 .text
 
-/*
- * Lab 3: Your code here for generating entry points for the different traps.
- */
+/* Entry points for every trap handler */
+TRAPHANDLER_NOEC(th0, T_DIVIDE)
+TRAPHANDLER_NOEC(th1, T_DEBUG)
+TRAPHANDLER_NOEC(th2, T_NMI)
+TRAPHANDLER_NOEC(th3, T_BRKPT)
+TRAPHANDLER_NOEC(th4, T_OFLOW)
+TRAPHANDLER_NOEC(th5, T_BOUND)
+TRAPHANDLER_NOEC(th6, T_ILLOP)
+TRAPHANDLER_NOEC(th7, T_DEVICE)  # aka "Coprocessor not available"
+TRAPHANDLER(th8, T_DBLFLT)
+TRAPHANDLER(th10, T_TSS)
+TRAPHANDLER(th11, T_SEGNP)
+TRAPHANDLER(th12, T_STACK)
+TRAPHANDLER(th13, T_GPFLT)
+TRAPHANDLER(th14, T_PGFLT)
+TRAPHANDLER_NOEC(th16, T_FPERR)
+TRAPHANDLER(th17, T_ALIGN)
+TRAPHANDLER_NOEC(th18, T_MCHK)
+TRAPHANDLER_NOEC(th19, T_SIMDERR)
 
+_alltraps:
+	# Complete TrapFrame struct
+	pushl %ds
+	pushl %es
+	pushal
 
+	# Push pointer to current stack address
+	# (the start of this TrapFrame)
+	pushl %esp
 
-/*
- * Lab 3: Your code here for _alltraps
- */
+	# Load GD_KD into %es and %ds
+	movl $GD_KD, %edx
+	movw %edx, %ds
+	movw %edx, %es
 
+	# Call trap, which should not return
+	call trap

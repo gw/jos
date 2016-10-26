@@ -303,10 +303,15 @@ region_alloc(struct Env *e, void *va, size_t len, int alloc_flags)
 // At the same time it clears to zero any portions of these segments
 // that are marked in the program header as being mapped
 // but not actually present in the ELF file - i.e., the program's bss section.
+// These sections are indicated in program headers where filesz < memsz.
 
 // ELF segments are not necessarily page-aligned, but you can
 // assume for this function that no two segments will touch
 // the same virtual page.
+//
+// TODO Build in some security checks so users can't load malicious
+// code into the kernel. See page 36 of
+// https://pdos.csail.mit.edu/6.828/2016/xv6/book-rev9.pdf
 static void
 load_icode(struct Env *e, uint8_t *binary)
 {
