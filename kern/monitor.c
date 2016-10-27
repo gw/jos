@@ -23,6 +23,7 @@ struct Command {
 };
 
 static struct Command commands[] = {
+	{ "backtrace", "Display a stack backtrace", mon_backtrace },
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
 };
@@ -94,7 +95,6 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 		// Move to the next call frame
 		ebp = (uint32_t *)*ebp;
 	}
-
 	return 0;
 }
 

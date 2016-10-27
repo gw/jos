@@ -566,10 +566,6 @@ page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 //     (if such a PTE exists)
 //   - The TLB must be invalidated if you remove an entry from
 //     the page table.
-//
-// Hint: The TA solution is implemented using page_lookup,
-// 	tlb_invalidate, and page_decref.
-//
 void
 page_remove(pde_t *pgdir, void *va)
 {
@@ -599,14 +595,14 @@ tlb_invalidate(pde_t *pgdir, void *va)
 }
 
 static uintptr_t user_mem_check_addr;
+static uint32_t user_mem_check_len;
 
 //
 // Check that an environment is allowed to access the range of memory
 // [va, va+len) with permissions 'perm | PTE_P'.
 // Normally 'perm' will contain PTE_U at least, but this is not required.
 // 'va' and 'len' need not be page-aligned; you must test every page that
-// contains any of that range.  You will test either 'len/PGSIZE',
-// 'len/PGSIZE + 1', or 'len/PGSIZE + 2' pages.
+// contains any of that range.
 //
 // A user program can access a virtual address if (1) the address is below
 // ULIM, and (2) the page table gives it permission.  These are exactly
@@ -621,8 +617,26 @@ static uintptr_t user_mem_check_addr;
 int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
-	// LAB 3: Your code here.
+	pte_t *pte_p;
+	uintptr_t start, end;
 
+	start = (uintptr_t)ROUNDDOWN(va, PGSIZE);
+	end = (uintptr_t)va + len;
+
+	while (start <= end) {
+		pte_p = pgdir_walk(env->env_pgdir, (void *)start, 0);
+
+		if ((start > ULIM) || !pte_p || !(*pte_p & (perm | PTE_P))) {
+			// buggyhello2 test expects different
+			// output here but I think this is
+			// more useful.
+			user_mem_check_addr = (uintptr_t)va;
+			user_mem_check_len = len;
+			return -E_FAULT;
+		}
+
+		start += PGSIZE;
+	}
 	return 0;
 }
 
@@ -637,8 +651,10 @@ void
 user_mem_assert(struct Env *env, const void *va, size_t len, int perm)
 {
 	if (user_mem_check(env, va, len, perm | PTE_U) < 0) {
+		// buggyhello2 test expects a different output here but I
+		// think this is more useful
 		cprintf("[%08x] user_mem_check assertion failure for "
-			"va %08x\n", env->env_id, user_mem_check_addr);
+			"va %08x, len %d\n", env->env_id, user_mem_check_addr, user_mem_check_len);
 		env_destroy(env);	// may not return
 	}
 }
