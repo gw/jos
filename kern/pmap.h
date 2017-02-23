@@ -77,10 +77,6 @@ void	user_mem_assert(struct Env *env, const void *va, size_t len, int perm);
  * the lowest 20 bits of the offset into the top 20 bits of the physical address
  * (aka the PFN), with 12 low-order zeros for the index into the page, resulting
  * in the PA of the start of the page frame in physical memory.
- *
- * TODO Seems like this would only work if the pages array started at 0 in
- * physical memory, right? The PFA of the first element in pages would end up
- * being 0?
  */
 static inline physaddr_t
 page2pa(struct PageInfo *pp)

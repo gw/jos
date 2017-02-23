@@ -58,6 +58,9 @@ struct PushRegs {
 														// x86 binary format, so we can't have the compiler
 														// adding slop to make the struct self-aligned.
 
+// Holds saved register values for an envirnoment
+// while that environment is not running. i.e.
+// thread state required to resume execution.
 struct Trapframe {
 	struct PushRegs tf_regs;
 	uint16_t tf_es;

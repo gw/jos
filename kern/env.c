@@ -343,7 +343,7 @@ load_icode(struct Env *e, uint8_t *binary)
 		// specified VA in env's address space
 		region_alloc(e, (void *)ph->p_va, ph->p_memsz, ALLOC_ZERO);
 
-		// Copy program segment into thelfhdre appropriate VA. Since we've
+		// Copy program segment into the appropriate VA. Since we've
 		// set `cr3` to e's PD it'll get written to e's physical pages.
 		memcpy((void *)ph->p_va, binary + ph->p_offset, ph->p_filesz);
 	}
