@@ -12,9 +12,9 @@ V = @
 # out the following line to use those tools (as opposed to the i386-jos-elf
 # tools that the course's make system looks for by default).
 #
-GCCPREFIX=i586-pc-linux-
+# GCCPREFIX=i586-pc-linux-
 
 # If the makefile cannot find your QEMU binary, uncomment the
 # following line and set it to the full path to QEMU.
 #
-QEMU=/Users/grant/Code/git/mit-qemu/i386-softmmu/qemu-system-i386
+# QEMU=
