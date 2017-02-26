@@ -65,7 +65,7 @@ trap_init(void)
 {
 	extern struct Segdesc gdt[];
 
-	// th* are declare in trapentry.h
+	// th* are declared in trapentry.h
 	// and defined via TRAPHANDLER in
 	// trapentry.S
 	SETGATE(idt[T_DIVIDE], 0, GD_KT, th0, 0);
