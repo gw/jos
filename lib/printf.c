@@ -42,7 +42,7 @@ vcprintf(const char *fmt, va_list ap)
 	b.idx = 0;
 	b.cnt = 0;
 	vprintfmt((void*)putch, &b, fmt, ap);
-	sys_cputs(b.buf, b.idx);
+	sys_cputs(b.buf, b.idx);  // Print the <256 remaining chars, if any
 
 	return b.cnt;
 }
@@ -59,4 +59,3 @@ cprintf(const char *fmt, ...)
 
 	return cnt;
 }
-

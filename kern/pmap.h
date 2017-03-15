@@ -22,6 +22,8 @@ extern pde_t *kern_pgdir;
  * KERNBASE, where the machine's maximum 256MB of physical memory is mapped --
  * and returns the corresponding physical address.  It panics if you pass it a
  * non-kernel virtual address.
+ *
+ * Just subtracts KERNBASE from the given kva.
  */
 #define PADDR(kva) _paddr(__FILE__, __LINE__, kva)
 
@@ -34,7 +36,10 @@ _paddr(const char *file, int line, void *kva)
 }
 
 /* This macro takes a physical address and returns the corresponding kernel
- * virtual address.  It panics if you pass an invalid physical address. */
+ * virtual address.  It panics if you pass an invalid physical address.
+ *
+ * Just adds KERNBASE to the given pa and casts to void *.
+ */
 #define KADDR(pa) _kaddr(__FILE__, __LINE__, pa)
 
 static inline void*
@@ -68,20 +73,44 @@ void *	mmio_map_region(physaddr_t pa, size_t size);
 int	user_mem_check(struct Env *env, const void *va, size_t len, int perm);
 void	user_mem_assert(struct Env *env, const void *va, size_t len, int perm);
 
+/* PageInfo* -> PFA of the page it corresponds to
+ *
+ * Get pointer's offset from start of pages array and shift left 12, converting
+ * the lowest 20 bits of the offset into the top 20 bits of the physical address
+ * (aka the PFN), with 12 low-order zeros for the index into the page, resulting
+ * in the PA of the start of the page frame in physical memory.
+ */
 static inline physaddr_t
 page2pa(struct PageInfo *pp)
 {
+	// pp and pages are pointers of the same type. Thus, subraction scales; i.e.
+	// (pp - pages) evaluates to the number of `PageInfo` structs between the two
+	// addresses, exclusive.
+	// (pp - pages) assembles to subtracting the addresses and then >>3. This
+	// divides by 8, which gives you the number of PageInfo structs between
+	// the two addresses. sizeof(PageInfo) == 8 because it needs 2 bytes of
+	// trailing padding to be self-aligned.
 	return (pp - pages) << PGSHIFT;
 }
 
+/* PA -> PageInfo*
+ *
+ * Get PFA from a given PA, and use that to index into the pages array. i.e.
+ * the PageInfo struct for a given PFA is at pages[pa >> 12].
+ */
 static inline struct PageInfo*
 pa2page(physaddr_t pa)
 {
 	if (PGNUM(pa) >= npages)
 		panic("pa2page called with invalid pa");
+
 	return &pages[PGNUM(pa)];
 }
 
+/* PageInfo* -> KVA
+ *
+ * Get PA, then add KERNBASE to get KVA
+ */
 static inline void*
 page2kva(struct PageInfo *pp)
 {

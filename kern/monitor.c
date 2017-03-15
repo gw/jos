@@ -23,6 +23,7 @@ struct Command {
 };
 
 static struct Command commands[] = {
+	{ "backtrace", "Display a stack backtrace", mon_backtrace },
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
 };
@@ -56,10 +57,44 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 	return 0;
 }
 
+#define ARGN 5  // Number of register args per stack frame
+
 int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
-	// Your code here.
+	struct Eipdebuginfo eip_meta;
+
+	// Get current ebp value as a pointer to a 32-bit word
+	uint32_t *ebp = (uint32_t *)read_ebp();
+
+	cprintf("Stack backtrace:\n");
+
+	while (ebp) {
+		// Current base pointer address
+		cprintf("  ebp %08x", ebp);
+
+		// Current return instruction address
+		cprintf("  eip %08x", ebp[1]);
+
+		// Values of the 5 stack argument spots
+		cprintf("  args");
+		cprintf(" %08x",   ebp[2]);
+		cprintf(" %08x",   ebp[3]);
+		cprintf(" %08x",   ebp[4]);
+		cprintf(" %08x",   ebp[5]);
+		cprintf(" %08x\n", ebp[6]);
+
+		// file:line: containing_function + offset_from_function_start
+		debuginfo_eip(ebp[1], &eip_meta);
+		cprintf("       ");
+		cprintf("%s:", eip_meta.eip_file);
+		cprintf("%d: ", eip_meta.eip_line);
+		cprintf("%.*s", eip_meta.eip_fn_namelen, eip_meta.eip_fn_name);
+		cprintf("+%d\n", ebp[1] - eip_meta.eip_fn_addr);
+
+		// Move to the next call frame
+		ebp = (uint32_t *)*ebp;
+	}
 	return 0;
 }
 

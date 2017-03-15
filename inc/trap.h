@@ -26,7 +26,7 @@
 
 // These are arbitrarily chosen, but with care not to overlap
 // processor defined exceptions or interrupt vectors.
-#define T_SYSCALL   48		// system call
+#define T_SYSCALL   48		// system call, 0x30
 #define T_DEFAULT   500		// catchall
 
 #define IRQ_OFFSET	32	// IRQ 0 corresponds to int IRQ_OFFSET
@@ -44,7 +44,7 @@
 #include <inc/types.h>
 
 struct PushRegs {
-	/* registers as pushed by pusha */
+	/* registers as pushed by pushal */
 	uint32_t reg_edi;
 	uint32_t reg_esi;
 	uint32_t reg_ebp;
@@ -53,8 +53,14 @@ struct PushRegs {
 	uint32_t reg_edx;
 	uint32_t reg_ecx;
 	uint32_t reg_eax;
-} __attribute__((packed));
+} __attribute__((packed));  // Force compiler to not add any padding. Necessary
+														// b/c we're using a struct to represent a specific
+														// x86 binary format, so we can't have the compiler
+														// adding slop to make the struct self-aligned.
 
+// Holds saved register values for an envirnoment
+// while that environment is not running. i.e.
+// thread state required to resume execution.
 struct Trapframe {
 	struct PushRegs tf_regs;
 	uint16_t tf_es;
@@ -62,15 +68,15 @@ struct Trapframe {
 	uint16_t tf_ds;
 	uint16_t tf_padding2;
 	uint32_t tf_trapno;
-	/* below here defined by x86 hardware */
+	/* below here pushed by x86 hardware */
 	uint32_t tf_err;
 	uintptr_t tf_eip;
 	uint16_t tf_cs;
 	uint16_t tf_padding3;
 	uint32_t tf_eflags;
 	/* below here only when crossing rings, such as from user to kernel */
-	uintptr_t tf_esp;
-	uint16_t tf_ss;
+	uintptr_t tf_esp;  // From TSS
+	uint16_t tf_ss;    // From TSS
 	uint16_t tf_padding4;
 } __attribute__((packed));
 

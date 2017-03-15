@@ -56,6 +56,19 @@ struct UserStabData {
 //		stab_binsearch(stabs, &left, &right, N_SO, 0xf0100184);
 //	will exit setting left = 118, right = 554.
 //
+//	TODO
+//	- Not sure if this handles SO boundaries.
+//		Output of `objdump -G obj/kern/kernel`:
+//
+//		65     SO     0      0      f0100040 0
+//    66     SO     0      2      f0100040 2639   kern/init.c
+//
+//		The first line marks the end of the previous source file section, and the
+//		second markes the beginning of the next one. If stab_binsearch matches on
+//		65, region_left will be set to that, and the search will continue for
+//		f0100041, with no chance of correctly setting region_left to 66.
+//
+//
 static void
 stab_binsearch(const struct Stab *stabs, int *region_left, int *region_right,
 	       int type, uintptr_t addr)
@@ -103,8 +116,6 @@ stab_binsearch(const struct Stab *stabs, int *region_left, int *region_right,
 }
 
 
-// debuginfo_eip(addr, info)
-//
 //	Fill in the 'info' structure with information about the specified
 //	instruction address, 'addr'.  Returns 0 if information was found, and
 //	negative if not.  But even if it returns negative it has stored some
@@ -127,11 +138,13 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 
 	// Find the relevant set of stabs
 	if (addr >= ULIM) {
-		stabs = __STAB_BEGIN__;
-		stab_end = __STAB_END__;
+		// Kernel addr
+		stabs = __STAB_BEGIN__;  // First row
+		stab_end = __STAB_END__;  // Last row
 		stabstr = __STABSTR_BEGIN__;
 		stabstr_end = __STABSTR_END__;
 	} else {
+		// User addr
 		// The user-application linker script, user/user.ld,
 		// puts information about the application's stabs (equivalent
 		// to __STAB_BEGIN__, __STAB_END__, __STABSTR_BEGIN__, and
@@ -139,14 +152,18 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 		// USTABDATA.
 		const struct UserStabData *usd = (const struct UserStabData *) USTABDATA;
 
-		// Make sure this memory is valid.
-		// Return -1 if it is not.  Hint: Call user_mem_check.
-		// LAB 3: Your code here.
-
 		stabs = usd->stabs;
 		stab_end = usd->stab_end;
 		stabstr = usd->stabstr;
 		stabstr_end = usd->stabstr_end;
+
+		// Make sure this memory is valid. Return -1 if it is not.
+		if (
+			user_mem_check(curenv, usd, sizeof(struct UserStabData), PTE_U) < 0 ||
+			user_mem_check(curenv, stabs, sizeof(struct Stab), PTE_U) < 0 ||
+			user_mem_check(curenv, stabstr, (uintptr_t)stabstr_end - (uintptr_t)stabstr, PTE_U) < 0
+		)
+			return -1;
 
 		// Make sure the STABS and string table memory is valid.
 		// LAB 3: Your code here.
@@ -156,10 +173,12 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 	if (stabstr_end <= stabstr || stabstr_end[-1] != 0)
 		return -1;
 
-	// Now we find the right stabs that define the function containing
-	// 'eip'.  First, we find the basic source file containing 'eip'.
-	// Then, we look in that source file for the function.  Then we look
-	// for the line number.
+	/*
+	Now we find the right stabs that define the function containing
+	'eip'.  First, we find the basic source file containing 'eip'.
+	Then, we look in that source file for the function.  Then we look
+	for the line number.
+	*/
 
 	// Search the entire set of stabs for the source file (type N_SO).
 	lfile = 0;
@@ -168,8 +187,7 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 	if (lfile == 0)
 		return -1;
 
-	// Search within that file's stabs for the function definition
-	// (N_FUN).
+	// Search within that file's stabs for the function definition (N_FUN).
 	lfun = lfile;
 	rfun = rfile;
 	stab_binsearch(stabs, &lfun, &rfun, N_FUN, addr);
@@ -181,33 +199,29 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 			info->eip_fn_name = stabstr + stabs[lfun].n_strx;
 		info->eip_fn_addr = stabs[lfun].n_value;
 		addr -= info->eip_fn_addr;
+
+		// Ignore stuff after the colon.
+		info->eip_fn_namelen = strfind(info->eip_fn_name, ':') - info->eip_fn_name;
+
 		// Search within the function definition for the line number.
 		lline = lfun;
 		rline = rfun;
 	} else {
 		// Couldn't find function stab!  Maybe we're in an assembly
 		// file.  Search the whole file for the line number.
-		info->eip_fn_addr = addr;
 		lline = lfile;
 		rline = rfile;
 	}
-	// Ignore stuff after the colon.
-	info->eip_fn_namelen = strfind(info->eip_fn_name, ':') - info->eip_fn_name;
-
 
 	// Search within [lline, rline] for the line number stab.
 	// If found, set info->eip_line to the right line number.
 	// If not found, return -1.
-	//
-	// Hint:
-	//	There's a particular stabs type used for line numbers.
-	//	Look at the STABS documentation and <inc/stab.h> to find
-	//	which one.
-	// Your code here.
+	stab_binsearch(stabs, &lline, &rline, N_SLINE, addr);
+		if (lline > rline)
+			return -1;
+		info->eip_line = stabs[lline].n_desc;
 
-
-	// Search backwards from the line number for the relevant filename
-	// stab.
+	// Search backwards from the line number for the relevant filename stab.
 	// We can't just use the "lfile" stab because inlined functions
 	// can interpolate code from a different file!
 	// Such included source files use the N_SOL stab type.
@@ -215,9 +229,9 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 	       && stabs[lline].n_type != N_SOL
 	       && (stabs[lline].n_type != N_SO || !stabs[lline].n_value))
 		lline--;
+
 	if (lline >= lfile && stabs[lline].n_strx < stabstr_end - stabstr)
 		info->eip_file = stabstr + stabs[lline].n_strx;
-
 
 	// Set eip_fn_narg to the number of arguments taken by the function,
 	// or 0 if there was no containing function.
