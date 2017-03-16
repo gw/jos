@@ -181,14 +181,13 @@ mp_init(void)
 		switch (*p) {
 		case MPPROC:
 			proc = (struct mpproc *)p;
-			if (proc->flags & MPPROC_BOOT)
+			if (proc->flags & MPPROC_BOOT)  // BSP
 				bootcpu = &cpus[ncpu];
-			if (ncpu < NCPU) {
+			if (ncpu < NCPU) {  // AP
 				cpus[ncpu].cpu_id = ncpu;
 				ncpu++;
 			} else {
-				cprintf("SMP: too many CPUs, CPU %d disabled\n",
-					proc->apicid);
+				cprintf("SMP: too many CPUs, CPU %d disabled\n", proc->apicid);
 			}
 			p += sizeof(struct mpproc);
 			continue;
