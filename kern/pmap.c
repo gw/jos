@@ -319,30 +319,20 @@ page_init(void)
 
 	size_t i;
 
-	// Mark rest of base memory as free
-	for (i = 1; i < npages_basemem; i++) {
-		pages[i].pp_ref = 0;
-		pages[i].pp_link = page_free_list;
-		page_free_list = &pages[i];
-	}
-
-	// Mark entire IO hole as in use
-	for (i = PGNUM(IOPHYSMEM); i < PGNUM(EXTPHYSMEM); i++) {
-		pages[i].pp_ref = 1;
-		pages[i].pp_link = NULL;
-	}
-
-	// Mark just-boot_alloc'd parts of external memory as in use
-	for (i = PGNUM(EXTPHYSMEM); i < PGNUM(PADDR(boot_alloc(0))); i++) {
-		pages[i].pp_ref = 1;
-		pages[i].pp_link = NULL;
-	}
-
-	// Mark rest of extended memory as free
-	for (i =  PGNUM(PADDR(boot_alloc(0))); i < npages; i++) {
-		pages[i].pp_ref = 0;
-		pages[i].pp_link = page_free_list;
-		page_free_list = &pages[i];
+	for (i = 1; i < npages; i++) {
+		if (
+			// IO Hole
+			(i >= PGNUM(IOPHYSMEM) && i < PGNUM(PADDR(boot_alloc(0))))
+		) {
+			// Mark as used
+			pages[i].pp_ref = 1;
+			pages[i].pp_link = NULL;
+		} else {
+			// Mark as free
+			pages[i].pp_ref = 0;
+			pages[i].pp_link = page_free_list;
+			page_free_list = &pages[i];
+		}
 	}
 }
 
