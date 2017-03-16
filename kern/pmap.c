@@ -629,7 +629,8 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Where to start the next region.  Initially, this is the
 	// beginning of the MMIO region.  Because this is static, its
 	// value will be preserved between calls to mmio_map_region
-	// (just like nextfree in boot_alloc).
+	// (just like nextfree in boot_alloc). Make sure it's always
+	// page-aligned.
 	static uintptr_t base = MMIOBASE;
 
 	// Reserve size bytes of virtual memory starting at base and
@@ -642,15 +643,22 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// write-through) in addition to PTE_W.  (If you're interested
 	// in more details on this, see section 10.5 of IA32 volume
 	// 3A.)
-	//
-	// Be sure to round size up to a multiple of PGSIZE and to
-	// handle if this reservation would overflow MMIOLIM (it's
-	// okay to simply panic if this happens).
-	//
-	// Hint: The staff solution uses boot_map_region.
-	//
-	// Your code here:
-	panic("mmio_map_region not implemented");
+
+	// Round size up to multiple of PGSIZE
+	size = ROUNDUP(size, PGSIZE);
+
+	// Round pa down to be page-aligned. Not sure if necessary.
+	pa = ROUNDDOWN(pa, PGSIZE);
+
+	if (pa + size >= MMIOLIM)
+		panic("Attempted MMIO map beyond MMIOLIM");
+
+	// Map it
+	boot_map_region(kern_pgdir, base, size, pa, PTE_PCD|PTE_PWT|PTE_W);
+
+	// Update base and return start of reserved region
+	base += size;
+	return (void *)(base - size);
 }
 
 static uintptr_t user_mem_check_addr;

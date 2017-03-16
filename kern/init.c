@@ -71,7 +71,7 @@ i386_init(void)
 // this variable.
 void *mpentry_kstack;
 
-// Start the non-boot (AP) processors.
+// Start the non-boot APs (Application Processors)
 static void
 boot_aps(void)
 {
@@ -79,7 +79,7 @@ boot_aps(void)
 	void *code;
 	struct CpuInfo *c;
 
-	// Write entry code to unused memory at MPENTRY_PADDR
+	// Copy mpentry.S code to unused memory at MPENTRY_PADDR
 	code = KADDR(MPENTRY_PADDR);
 	memmove(code, mpentry_start, mpentry_end - mpentry_start);
 
@@ -88,9 +88,9 @@ boot_aps(void)
 		if (c == cpus + cpunum())  // We've started already.
 			continue;
 
-		// Tell mpentry.S what stack to use 
+		// Tell mpentry.S what stack to use
 		mpentry_kstack = percpu_kstacks[c - cpus] + KSTKSIZE;
-		// Start the CPU at mpentry_start
+		// Start the CPU at mpentry_start in mpentry.S
 		lapic_startap(c->cpu_id, PADDR(code));
 		// Wait for the CPU to finish some basic setup in mp_main()
 		while(c->cpu_status != CPU_STARTED)
@@ -98,11 +98,11 @@ boot_aps(void)
 	}
 }
 
-// Setup code for APs
+// Setup code for APs. Gets called by each AP in mpentry.S.
 void
 mp_main(void)
 {
-	// We are in high EIP now, safe to switch to kern_pgdir 
+	// We are in high EIP now, safe to switch to kern_pgdir
 	lcr3(PADDR(kern_pgdir));
 	cprintf("SMP: CPU %d starting\n", cpunum());
 
