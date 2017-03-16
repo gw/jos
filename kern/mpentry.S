@@ -14,7 +14,7 @@
 # STARTUP. Thus this code must start at a 4096-byte boundary.
 #
 # Because this code sets DS to zero, it must run from an address in
-# the low 2^16 bytes of physical memory.
+# the low 2^16 bytes (64kb) of physical memory. TODO: WHY?
 #
 # boot_aps() (in init.c) copies this code to MPENTRY_PADDR (which
 # satisfies the above restrictions).  Then, for each AP, it stores the
@@ -33,10 +33,10 @@
 .set PROT_MODE_CSEG, 0x8	# kernel code segment selector
 .set PROT_MODE_DSEG, 0x10	# kernel data segment selector
 
-.code16           
+.code16
 .globl mpentry_start
 mpentry_start:
-	cli            
+	cli
 
 	xorw    %ax, %ax
 	movw    %ax, %ds
