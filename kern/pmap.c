@@ -312,7 +312,7 @@ mem_init_mp(void)
 			kstacktop_i - KSTKSIZE,
 			KSTKSIZE,
 			PADDR(percpu_kstacks[i]),
-			PTE_W
+			PTE_W | PTE_P
 		);
 	}
 }
@@ -663,7 +663,7 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Round pa down to be page-aligned. Not sure if necessary.
 	pa = ROUNDDOWN(pa, PGSIZE);
 
-	if (pa + size >= MMIOLIM)
+	if (base + size > MMIOLIM)
 		panic("Attempted MMIO map beyond MMIOLIM");
 
 	// Map it
@@ -1131,8 +1131,8 @@ check_page(void)
 	page_free(pp2);
 
 	// test mmio_map_region
-	mm1 = (uintptr_t) mmio_map_region(0, 4097);
-	mm2 = (uintptr_t) mmio_map_region(0, 4096);
+	mm1 = (uintptr_t) mmio_map_region(0, 4097);  // First 2 pages of MMIO
+	mm2 = (uintptr_t) mmio_map_region(0, 4096);  // 3rd page on top of that
 	// check that they're in the right region
 	assert(mm1 >= MMIOBASE && mm1 + 8096 < MMIOLIM);
 	assert(mm2 >= MMIOBASE && mm2 + 8096 < MMIOLIM);
