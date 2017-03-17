@@ -301,9 +301,20 @@ mem_init_mp(void)
 	//             it will fault rather than overwrite another CPU's stack.
 	//             Known as a "guard page".
 	//     Permissions: kernel RW, user NONE
-	//
-	// LAB 4: Your code here:
 
+	uintptr_t kstacktop_i;
+
+	int i;
+	for (i = 0; i < NCPU; i++) {
+		kstacktop_i = KSTACKTOP - (i * (KSTKSIZE + KSTKGAP));
+		boot_map_region(
+			kern_pgdir,
+			kstacktop_i - KSTKSIZE,
+			KSTKSIZE,
+			PADDR(percpu_kstacks[i]),
+			PTE_W
+		);
+	}
 }
 
 // --------------------------------------------------------------
@@ -913,9 +924,11 @@ check_kern_pgdir(void)
 	for (n = 0; n < NCPU; n++) {
 		uint32_t base = KSTACKTOP - (KSTKSIZE + KSTKGAP) * (n + 1);
 		for (i = 0; i < KSTKSIZE; i += PGSIZE)
+			// Check each stack page is mapped correctly
 			assert(check_va2pa(pgdir, base + KSTKGAP + i)
 				== PADDR(percpu_kstacks[n]) + i);
 		for (i = 0; i < KSTKGAP; i += PGSIZE)
+			// Check guard pages unmapped
 			assert(check_va2pa(pgdir, base + i) == ~0);
 	}
 

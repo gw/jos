@@ -18,38 +18,39 @@
 #define GD_UD     0x20     // user data
 #define GD_TSS0   0x28     // Task segment selector for CPU 0
 
-// Physical memory map:
-//
-// +------------------+  <- 0xFFFFFFFF (4GB)
-// |      32-bit      |
-// |  memory mapped   |
-// |     devices      |
-// |                  |
-// /\/\/\/\/\/\/\/\/\/\
-//
-// /\/\/\/\/\/\/\/\/\/\
-// |                  |
-// |      Unused      |
-// |                  |
-// +------------------+  <- depends on amount of RAM
-// |                  |
-// |                  |
-// | Extended Memory  |
-// |                  |
-// |                  |
-// +------------------+  <- 0x00100000 (1MB)
-// |     BIOS ROM     |
-// +------------------+  <- 0x000F0000 (960KB)
-// |  16-bit devices, |
-// |  expansion ROMs  |
-// +------------------+  <- 0x000C0000 (768KB)
-// |   VGA Display    |
-// +------------------+  <- 0x000A0000 (640KB)
-// |                  |
-// |    Low Memory    |
-// |                  |
-// +------------------+  <- 0x00000000
-//
+/*
+* Physical memory map:
+*
+*                           +------------------+  <- 0xFFFFFFFF (4GB)
+*                           |      32-bit      |
+*                           |  memory mapped   |
+*                           |     devices      |
+*                           |                  |
+*                           MMMMMMMMMMMMMMMMMMMM
+*
+*                           WWWWWWWWWWWWWWWWWWWW
+*                           |                  |
+*                           |      Unused      |
+*                           |                  |
+*                           +------------------+  <- depends on amount of RAM
+*                           |                  |
+*                           |                  |
+*                           | Extended Memory  |
+*                           |                  |
+*                           |                  |
+*                           +------------------+  <- 0x00100000 (1MB)
+*                           |     BIOS ROM     |
+*                           +------------------+  <- 0x000F0000 (960KB)
+*                           |  16-bit devices, |
+*                           |  expansion ROMs  |
+*                           +------------------+  <- 0x000C0000 (768KB)
+*                           |   VGA Display    |
+*                           +------------------+  <- 0x000A0000 (640KB)
+*                           |                  |
+*                           |    Low Memory    |
+*                           |                  |
+*                           +------------------+  <- 0x00000000
+*/
 
 /*
  * Virtual memory map:                                Permissions
@@ -127,6 +128,7 @@
 
 // Kernel stack.
 #define KSTACKTOP	KERNBASE
+// TODO: Why are these multiplied by 8?
 #define KSTKSIZE	(8*PGSIZE)   		// size of a kernel stack
 #define KSTKGAP		(8*PGSIZE)   		// size of a kernel stack guard
 
