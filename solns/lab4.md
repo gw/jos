@@ -41,3 +41,10 @@ We could maybe achieve the same effect by putting `mpentry.S` in a different sec
 
 Even if one kernel thread holds the lock it can still be interrupted. When that happens, the x86 hardware pushes a trapframe onto whatever kernel stack is in the TSS. If we only had one big kernel stack shared b/w all CPUs, then if one thread is in the kernel, other threads could be simultaneously pushing trap frames onto the stack and clobbering it.
 
+>In your implementation of env_run() you should have called lcr3(). Before and after the call to lcr3(), your code makes references (at least it should) to the variable e, the argument to env_run. Upon loading the %cr3 register, the addressing context used by the MMU is instantly changed. But a virtual address (namely e) has meaning relative to a given address context--the address context specifies the physical address to which the virtual address maps. Why can the pointer e be dereferenced both before and after the addressing switch?
+
+Because the JOS kernel maps its own VM mappings (linear->physical mappings for high-address kernel code) into the address space of EVERY newly allocated environment. Thus, switching to a new env's page dir won't change how kernel variables are mapped.
+
+>Whenever the kernel switches from one environment to another, it must ensure the old environment's registers are saved so they can be restored properly later. Why? Where does this happen?
+
+It's gotta save execution thread state (register state, stack) so the environment can be re-run later. JOS gets some help from the x86 hardware, which pushes register state into the trapframe on the kernel stack on every trap before giving control to the kernel. In `trap()`, `curenv->env_tf = *tf;` takes this kernel stack state and saves it on the Env struct.
