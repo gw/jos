@@ -35,3 +35,9 @@ This means that the linker binds address references in `mpentry.S` to high addre
 This means we have to copy the `mpentry.S` code to `MPENTRY_PADDR` (0x7000), but any unused page-aligned physical address below 640kb would work. Thus, its "load address" is `MPENTRY_PADDR`, but it's link address remains unchanged from when the kernel image was linked: `0xf0100000`. This means we have to do some manual relocation--we achieve this with the `MPBOOTPHYS` macro which simply re-calculates absolute memory references in `mpentry.S` to be based off `MPENTRY_PADDR` instead of `0xf0100000`.
 
 We could maybe achieve the same effect by putting `mpentry.S` in a different section of the kernel image so we can give it a different link address.
+
+
+>It seems that using the big kernel lock guarantees that only one CPU can run the kernel code at a time. Why do we still need separate kernel stacks for each CPU? Describe a scenario in which using a shared kernel stack will go wrong, even with the protection of the big kernel lock.
+
+Even if one kernel thread holds the lock it can still be interrupted. When that happens, the x86 hardware pushes a trapframe onto whatever kernel stack is in the TSS. If we only had one big kernel stack shared b/w all CPUs, then if one thread is in the kernel, other threads could be simultaneously pushing trap frames onto the stack and clobbering it.
+
