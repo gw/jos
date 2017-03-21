@@ -48,3 +48,45 @@ Because the JOS kernel maps its own VM mappings (linear->physical mappings for h
 >Whenever the kernel switches from one environment to another, it must ensure the old environment's registers are saved so they can be restored properly later. Why? Where does this happen?
 
 It's gotta save execution thread state (register state, stack) so the environment can be re-run later. JOS gets some help from the x86 hardware, which pushes register state into the trapframe on the kernel stack on every trap before giving control to the kernel. In `trap()`, `curenv->env_tf = *tf;` takes this kernel stack state and saves it on the Env struct.
+
+## Notable Bugs
+### Double-Acquiring Kernel Lock on multi-CPU startup
+Running `make qemu-nox CPUS=2` gave this output:
+```shell
+***
+*** Use Ctrl-a x to exit qemu
+***
+qemu-system-i386 -nographic -hda obj/kern/kernel.img -serial mon:stdio -gdb tcp::26000 -D qemu.log -smp 2
+6828 decimal is 15254 octal!
+Physical memory: 66556K available, base = 640K, extended = 65532K
+check_page_alloc() succeeded!
+check_page() succeeded!
+check_kern_pgdir() succeeded!
+check_page_installed_pgdir() succeeded!
+SMP: CPU 0 found 2 CPU(s)
+enabled interrupts: 1 2
+SMP: CPU 1 starting
+SMP: CPU 0 starting
+kernel panic on CPU 0 at kern/spinlock.c:65: CPU 0 cannot acquire &kernel_lock: already holding
+Welcome to the JOS kernel monitor!
+Type 'help' for a list of commands.
+K>
+```
+`mp_main`, which should only run on APs, was running on the BSP, for some reason. Thus CPU0 would try to acquire the kernel lock which it already held from its acquisition in `i386_init`.
+
+
+Took a while to figure out, but eventually traced it to trap.c:126. It was previously
+```c
+ltr(GD_TSS0);
+```
+
+but SHOULD be:
+```c
+ltr(GD_TSS0 + (cpu_id * sizeof(struct Segdesc)));
+```
+
+The `ltr` x86 instruction loads a new TSS Selector into the Task Register. This selector indexes into the GDT--the entry there points to the actual TSS to use. It sets a "busy" bit on said TSS to prevent another CPU from loading it simultaneously, but does not induce an actual task switch.
+
+`GD_TSS0` is the TSS Selector for CPU0's TSS (we allocate one per CPU in the GDT in env.c). Thus, while booting on an AP, we were loading the TSS of the BSP. Stepping across this instruction on an AP in GDB caused a thread switch back to the BSP, at which point it would be executing `mp_main`, for some reason, instead of spinning at the bottom of `boot_aps`. Still don't understand why.
+
+[more](https://pdos.csail.mit.edu/6.828/2010/readings/i386/s07_01.htm) on the TSS, TSS Selectors, TSS Descriptors.

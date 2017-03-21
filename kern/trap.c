@@ -123,7 +123,7 @@ trap_init_percpu(void)
 	// user space on that CPU.
 	// Load the TSS selector (like other segment selectors, the
 	// bottom three bits are special; we leave them 0)
-	ltr(GD_TSS0);
+	ltr(GD_TSS0 + (cpu_id * sizeof(struct Segdesc)));
 
 	// Load the IDT
 	lidt(&idt_pd);
