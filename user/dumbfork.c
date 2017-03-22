@@ -28,11 +28,20 @@ duppage(envid_t dstenv, void *addr)
 	int r;
 
 	// This is NOT what you should do in your fork.
+	// Allocate a new page in the child
 	if ((r = sys_page_alloc(dstenv, addr, PTE_P|PTE_U|PTE_W)) < 0)
 		panic("sys_page_alloc: %e", r);
+
+	// Point parent's page at UTEMP (allocating if necessary) to
+	//  the same physical page as the newly allocate page
 	if ((r = sys_page_map(dstenv, addr, 0, UTEMP, PTE_P|PTE_U|PTE_W)) < 0)
 		panic("sys_page_map: %e", r);
+
+	// Copy parent's page at addr into parent's page at UTEMP,
+	// thus also copying it into child's page at addr
 	memmove(UTEMP, addr, PGSIZE);
+
+	// Unmap parent's page at UTEMP
 	if ((r = sys_page_unmap(0, UTEMP)) < 0)
 		panic("sys_page_unmap: %e", r);
 }
@@ -52,7 +61,7 @@ dumbfork(void)
 	// will return 0 instead of the envid of the child.
 	envid = sys_exofork();
 	if (envid < 0)
-		panic("sys_exofork: %e", envid);
+		panic("sys_exofork: %e\n", envid);
 	if (envid == 0) {
 		// We're the child.
 		// The copied value of the global variable 'thisenv'
@@ -77,4 +86,3 @@ dumbfork(void)
 
 	return envid;
 }
-

@@ -129,10 +129,6 @@ boot_alloc(uint32_t n)
 // Paging data structures
 pde_t *kern_pgdir;		// Addr of start of kernel's initial page directory
 struct PageInfo *pages;		// Physical page state array
-// This shouldn't be called a list; it's
-// merely a pointer to the next free PageInfo
-// struct, and PageInfo.pp_link points to the
-// next free PageInfo struct.
 static struct PageInfo *page_free_list;
 
 void

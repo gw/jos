@@ -76,14 +76,17 @@ sys_yield(void)
 static envid_t
 sys_exofork(void)
 {
-	// Create the new environment with env_alloc(), from kern/env.c.
-	// It should be left as env_alloc created it, except that
-	// status is set to ENV_NOT_RUNNABLE, and the register set is copied
-	// from the current environment -- but tweaked so sys_exofork
-	// will appear to return 0.
+	struct Env *e;
+	int err;
 
-	// LAB 4: Your code here.
-	panic("sys_exofork not implemented");
+	if (err = env_alloc(&e, curenv->env_id))
+		return err;
+
+	e->env_status = ENV_NOT_RUNNABLE;
+	e->env_tf = curenv->env_tf;  // Copy register state
+	e->env_tf.tf_regs.reg_eax = 0;  // Return 0 in child
+
+	return e->env_id;
 }
 
 // Set envid's env_status to status, which must be ENV_RUNNABLE
@@ -96,14 +99,18 @@ sys_exofork(void)
 static int
 sys_env_set_status(envid_t envid, int status)
 {
-	// Hint: Use the 'envid2env' function from kern/env.c to translate an
-	// envid to a struct Env.
-	// You should set envid2env's third argument to 1, which will
-	// check whether the current environment has permission to set
-	// envid's status.
+	if (!(status == ENV_RUNNABLE || status == ENV_NOT_RUNNABLE))
+		return -E_INVAL;
 
-	// LAB 4: Your code here.
-	panic("sys_env_set_status not implemented");
+	// Get target env, checking if
+	// curenv is allowed to modify
+	struct Env *e;
+	int err;
+	if (err = envid2env(envid, &e, 1))
+		return err;
+
+	e->env_status = status;
+	return 0;
 }
 
 // Set the page fault upcall for 'envid' by modifying the corresponding struct
@@ -140,19 +147,38 @@ sys_env_set_pgfault_upcall(envid_t envid, void *func)
 static int
 sys_page_alloc(envid_t envid, void *va, int perm)
 {
-	// Hint: This function is a wrapper around page_alloc() and
-	//   page_insert() from kern/pmap.c.
-	//   Most of the new code you write should be to check the
-	//   parameters for correctness.
-	//   If page_insert() fails, remember to free the page you
-	//   allocated!
+	// Check address
+	if ((uint32_t)va >= UTOP || (uint32_t)va % PGSIZE != 0)
+		return -E_INVAL;
 
-	// LAB 4: Your code here.
-	panic("sys_page_alloc not implemented");
+	// Check permissions
+	if (perm & ~PTE_SYSCALL || !(perm & PTE_U) || !(perm & PTE_P))
+		return -E_INVAL;
+
+	// Allocate a physical page
+	struct PageInfo *p;
+	if ((p = page_alloc(ALLOC_ZERO)) == NULL)
+		return -E_NO_MEM;
+
+	// Get the Env struct for given env_id,
+	// checking if curenv is allowed to modify
+	int err;
+	struct Env *e;
+	if (err = envid2env(envid, &e, 1))
+		return err;
+
+	// Map newly-allocated page to target page dir
+	if (err = page_insert(e->env_pgdir, p, va, perm)) {
+		page_free(p);
+		return err;
+	}
+
+	return 0;
 }
 
 // Map the page of memory at 'srcva' in srcenvid's address space
 // at 'dstva' in dstenvid's address space with permission 'perm'.
+// Allocates a new page if in the dest env if necessary (see pgdir_walk.)
 // Perm has the same restrictions as in sys_page_alloc, except
 // that it also must not grant write access to a read-only
 // page.
@@ -169,17 +195,49 @@ sys_page_alloc(envid_t envid, void *va, int perm)
 //	-E_NO_MEM if there's no memory to allocate any necessary page tables.
 static int
 sys_page_map(envid_t srcenvid, void *srcva,
-	     envid_t dstenvid, void *dstva, int perm)
+	     			 envid_t dstenvid, void *dstva, int perm)
 {
-	// Hint: This function is a wrapper around page_lookup() and
-	//   page_insert() from kern/pmap.c.
-	//   Again, most of the new code you write should be to check the
-	//   parameters for correctness.
-	//   Use the third argument to page_lookup() to
-	//   check the current permissions on the page.
+	// Check source and dest addresses
+	if ((uint32_t)srcva >= UTOP || (uint32_t)srcva % PGSIZE != 0)
+		return -E_INVAL;
+	if ((uint32_t)dstva >= UTOP || (uint32_t)dstva % PGSIZE != 0)
+		return -E_INVAL;
 
-	// LAB 4: Your code here.
-	panic("sys_page_map not implemented");
+	// Check permissions
+	if (perm & ~PTE_SYSCALL || !(perm & PTE_U) || !(perm & PTE_P))
+		return -E_INVAL;
+
+	// Get source and dest Env structs,
+	// checking if curenv is allowed to modify
+	int err;
+	struct Env *src_e;
+	struct Env *dest_e;
+	if (err = envid2env(srcenvid, &src_e, 1))
+		return err;
+	if (err = envid2env(dstenvid, &dest_e, 1))
+		return err;
+
+	// Look up source page
+	struct PageInfo *p;
+	pte_t  *pte_p;
+	p = page_lookup(src_e->env_pgdir, srcva, &pte_p);
+
+	// If caller wants to make it writable,
+	// ensure it's writable in the source mapping
+	if (perm & PTE_W && !(*pte_p & PTE_W))
+		return -E_INVAL;
+
+	// Map it into dest env's address space
+	// Note that we're not allocating a new page,
+	// simply mapping an already allocated one
+	// into a new env.
+	// Also note that we don't want to free it
+	// on failure as we did in sys_page_alloc;
+	// this page may still be used by the src env.
+	if (err = page_insert(dest_e->env_pgdir, p, dstva, perm))
+		return err;
+
+	return 0;
 }
 
 // Unmap the page of memory at 'va' in the address space of 'envid'.
@@ -192,10 +250,20 @@ sys_page_map(envid_t srcenvid, void *srcva,
 static int
 sys_page_unmap(envid_t envid, void *va)
 {
-	// Hint: This function is a wrapper around page_remove().
+	// Check address
+	if ((uint32_t)va >= UTOP || (uint32_t)va % PGSIZE != 0)
+		return -E_INVAL;
 
-	// LAB 4: Your code here.
-	panic("sys_page_unmap not implemented");
+	// Get target env, checking if curenv
+	// is allowed to modify
+	int err;
+	struct Env *e;
+	if (err = envid2env(envid, &e, 1))
+		return err;
+
+	page_remove(e->env_pgdir, va);
+
+	return 0;
 }
 
 // Try to send 'value' to the target env 'envid'.
@@ -272,6 +340,21 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 		case SYS_cputs:
 			sys_cputs((char *)a1, a2);
 			return 0;
+
+		case SYS_exofork:
+			return sys_exofork();
+
+		case SYS_env_set_status:
+			return sys_env_set_status(a1, a2);
+
+		case SYS_page_alloc:
+			return sys_page_alloc(a1, (void *)a2, a3);
+
+		case SYS_page_map:
+			return sys_page_map(a1, (void *)a2, a3, (void *)a4, a5);
+
+		case SYS_page_unmap:
+			return sys_page_unmap(a1, (void *)a2);
 
 		case SYS_yield:
 			sys_yield();
