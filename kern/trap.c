@@ -319,20 +319,48 @@ page_fault_handler(struct Trapframe *tf)
 	// If there's no page fault upcall, the environment didn't allocate a
 	// page for its exception stack or can't write to it, or the exception
 	// stack overflows, then destroy the environment that caused the fault.
-	// Note that the grade script assumes you will first check for the page
-	// fault upcall and print the "user fault va" message below if there is
-	// none.  The remaining three checks can be combined into a single test.
-	//
-	// Hints:
-	//   user_mem_assert() and env_run() are useful here.
-	//   To change what the user environment runs, modify 'curenv->env_tf'
-	//   (the 'tf' variable points at 'curenv->env_tf').
 
-	// LAB 4: Your code here.
+	// Check if user set up a page fault handler. If not, destroy.
+	if (!curenv->env_pgfault_upcall) {
+		cprintf("[%08x] user fault va %08x ip %08x -- no upcall\n",
+			curenv->env_id, fault_va, tf->tf_eip);
+		print_trapframe(tf);
+		env_destroy(curenv);  // Does not return
+	}
+	// Make sure user can write to its exception stack and that
+	// it hasn't already overflowed. Said exception stack is one
+	// page, and there's an unmapped page below it, so this test
+	// ought to cover both cases by testing whatever page contains
+	// the address at tf_esp.
+	user_mem_assert(curenv, (void *)tf->tf_esp, 1, 0);  // If fail, does not return
 
-	// Destroy the environment that caused the fault.
-	cprintf("[%08x] user fault va %08x ip %08x\n",
-		curenv->env_id, fault_va, tf->tf_eip);
-	print_trapframe(tf);
-	env_destroy(curenv);
+	// Check if this fault comes from the user page fault handler--
+	// if so, push an empty word onto exception stack.
+	uintptr_t ux_esp;  // Pointer to top of user exception stack
+	if (tf->tf_esp >= UXSTACKTOP - PGSIZE && tf->tf_esp < UXSTACKTOP)
+		// tf_esp is already in the user exception stack.
+		ux_esp = tf->tf_esp - 4;
+	else
+		ux_esp = UXSTACKTOP;
+
+	// Push a UTrapframe onto the exception stack
+	// Make sure we have enough space
+	ux_esp -= sizeof(struct UTrapframe);
+	if (ux_esp < UXSTACKTOP - PGSIZE)
+		panic("not enough space for UTrapframe");
+
+	// Build the frame
+	struct UTrapframe *utf = (struct UTrapframe *)(ux_esp);
+	utf->utf_fault_va = fault_va;
+	utf->utf_err = tf->tf_err;
+	utf->utf_regs = tf->tf_regs;
+	utf->utf_eip = tf->tf_eip;
+	utf->utf_eflags = tf->tf_eflags;
+	utf->utf_esp = tf->tf_esp;
+
+	// Modify curenv to execute at its page fault handler
+	// using the exception stack, and run it.
+	tf->tf_eip = (uintptr_t)curenv->env_pgfault_upcall;
+	tf->tf_esp = ux_esp;
+	env_run(curenv);
 }

@@ -348,6 +348,7 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 {
 	// Call the function corresponding to the 'syscallno' parameter.
 	// Return any appropriate return value.
+	cprintf("SYSCALL: %d\n", syscallno);
 	switch (syscallno) {
 		case SYS_cputs:
 			sys_cputs((char *)a1, a2);

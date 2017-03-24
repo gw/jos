@@ -80,6 +80,22 @@ struct Trapframe {
 	uint16_t tf_padding4;
 } __attribute__((packed));
 
+// Trap frame for the userland page fault handler--
+// see trap.c:page_fault_handler/ This is all
+// userland state at "time of trap".
+
+// The purpose of this frame is to store the
+// register state at the time of the userland
+// page fault so that the userland page fault
+// handler can a) handle the problem and b)
+// re-execute that thread without returning
+// to the kernel.
+
+// Not totally sure why we don't just copy
+// the Trapframe struct into the user exception
+// stack instead of having an additional
+// UTrapframe struct. The only additional
+// field it has is utf_fault_va.
 struct UTrapframe {
 	/* information about the fault */
 	uint32_t utf_fault_va;	/* va for T_PGFLT, 0 otherwise */
