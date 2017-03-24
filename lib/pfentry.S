@@ -33,11 +33,11 @@
 .globl _pgfault_upcall
 _pgfault_upcall:
 	// Call the C page fault handler.
-	pushl %esp			// function argument: pointer to UTF
+	pushl %esp			// function argument: pointer to UTrapframe on exception stack
 	movl _pgfault_handler, %eax
 	call *%eax
 	addl $4, %esp			// pop function argument
-	
+
 	// Now the C page fault handler has returned and you must return
 	// to the trap time state.
 	// Push trap-time %eip onto the trap-time stack.
@@ -58,25 +58,31 @@ _pgfault_upcall:
 	//   In the case of a recursive fault on the exception stack,
 	//   note that the word we're pushing now will fit in the
 	//   blank word that the kernel reserved for us.
-	//
-	// Throughout the remaining code, think carefully about what
-	// registers are available for intermediate calculations.  You
-	// may find that you have to rearrange your code in non-obvious
-	// ways as registers become unavailable as scratch space.
-	//
-	// LAB 4: Your code here.
+
+	// TT = trap-time
+	// Push TT eip onto TT stack so we can `ret` to it below
+	// This is why trap.c:page_fault_handler pushes the empty
+	// word when handling page faults caused by the user page
+	// fault handler--it makes space between the two UTrapframes
+	// for this TT eip to be inserted.
+	movl 40(%esp), %eax  // Store TT eip
+	subl $4, 48(%esp)    // Grow TT stack
+	movl 48(%esp), %ebx  // Store new TT esp so we can deref it
+	movl %eax, (%ebx)    // Put TT eip on TT esp
 
 	// Restore the trap-time registers.  After you do this, you
 	// can no longer modify any general-purpose registers.
-	// LAB 4: Your code here.
+	addl $8, %esp  // pop off fault_va and tf_err
+	popal
 
 	// Restore eflags from the stack.  After you do this, you can
 	// no longer use arithmetic operations or anything else that
 	// modifies eflags.
-	// LAB 4: Your code here.
+	addl $4, %esp // pop off TT %eip, already put it on TT stack
+	popfl         // pop into eflags. %esp should now point to TT %esp.
 
 	// Switch back to the adjusted trap-time stack.
-	// LAB 4: Your code here.
+	popl %esp
 
 	// Return to re-execute the instruction that faulted.
-	// LAB 4: Your code here.
+	ret
