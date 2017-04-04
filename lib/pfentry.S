@@ -65,8 +65,10 @@ _pgfault_upcall:
 	// word when handling page faults caused by the user page
 	// fault handler--it makes space between the two UTrapframes
 	// for this TT eip to be inserted.
+	// See "Invoking the user page fault handler" in
+	// https://pdos.csail.mit.edu/6.828/2016/labs/lab4/
 	movl 40(%esp), %eax  // Store TT eip
-	subl $4, 48(%esp)    // Grow TT stack
+	subl $4, 48(%esp)    // Grow TT stack to point to beginning of the kernel-reserved blank word
 	movl 48(%esp), %ebx  // Store new TT esp so we can deref it
 	movl %eax, (%ebx)    // Put TT eip on TT esp
 
