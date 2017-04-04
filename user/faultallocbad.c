@@ -1,5 +1,8 @@
 // test user-level fault handler -- alloc pages to fix faults
-// doesn't work because we sys_cputs instead of cprintf (exercise: why?)
+// doesn't work because we sys_cputs instead of cprintf. sys_cputs
+// uses user_mem_assert to make sure the env has permission to
+// access the passed-in memory location and destroys the env if
+// it doesn't--thus it never actually page faults.
 
 #include <inc/lib.h>
 
