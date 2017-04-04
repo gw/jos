@@ -90,3 +90,7 @@ The `ltr` x86 instruction loads a new TSS Selector into the Task Register. This 
 `GD_TSS0` is the TSS Selector for CPU0's TSS (we allocate one per CPU in the GDT in env.c). Thus, while booting on an AP, we were loading the TSS of the BSP. Stepping across this instruction on an AP in GDB caused a thread switch back to the BSP, at which point it would be executing `mp_main`, for some reason, instead of spinning at the bottom of `boot_aps`. Still don't understand why.
 
 [more](https://pdos.csail.mit.edu/6.828/2010/readings/i386/s07_01.htm) on the TSS, TSS Selectors, TSS Descriptors.
+
+### `duppage` different PTEs
+Was using `uvpt[PTX(la)]` instead of `uvpt[PGNUM(la)]` in fork.c:fork and fork.c:duppage. This meant that I wasn't getting the right PTE for the given virtual address. It worked for some VAs because the permissions happened to be the same, but eventually it would get a PTE with different permissions from the actual PTE for the VA, and `duppage` wouldn't get called when it should've been.
+`PTX` is for indexing into individual page tables because it only grabs the middle 10 bits, whereas `PGNUM` just right-shifts 12 leaving you with the high 20 bits, which is necessary b/c uvpt is a virtual table that holds all 2^20 PTEs in the address space.
