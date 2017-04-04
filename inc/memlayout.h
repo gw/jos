@@ -184,17 +184,31 @@ typedef uint32_t pde_t;
 #if JOS_USER
 /*
  * The page directory entry corresponding to the virtual address range
- * [UVPT, UVPT + PTSIZE) points to the page directory itself.  Thus, the page
- * directory is treated as a page table as well as a page directory.
+ * [UVPT, UVPT + PTSIZE) points to the page directory itself.  That is,
+ * the PDE at UVPT points to the base of the page directory (see env.c:
+ * env_setup_vm). Thus, the page directory is treated as a page table
+ * as well as a page directory.
  *
  * One result of treating the page directory as a page table is that all PTEs
  * can be accessed through a "virtual page table" at virtual address UVPT (to
  * which uvpt is set in lib/entry.S).  The PTE for page number N is stored in
- * uvpt[N].  (It's worth drawing a diagram of this!)
+ * uvpt[N]. This virtual page table is contiguous and maps all of RAM (it's
+ * 2^20 4-byte PTEs that each map 2^10 bytes). Linear addresses that use it
+ * look like: UVPT << PDXSHIFT | any << PTXSHIFT | offset
+ * Such addresses put you in the second level of the paging tree because you
+ * loop back once. The second level is a bunch of disparate pages each containing
+ * 2^10 PTEs, all of which point directly to physical pages in RAM.
  *
- * A second consequence is that the contents of the current page directory
- * will always be available at virtual address (UVPT + (UVPT >> PGSHIFT)), to
- * which uvpd is set in lib/entry.S.
+ * A second consequence is that the address of the current page directory
+ * will always be virtual address (UVPT + (UVPT >> PGSHIFT)), to
+ * which uvpd is set in lib/entry.S. This basically involves recursing
+ * back to the base of the page directory twice (instead of once, as when
+ * accessing the "virtual page table" described above.) Thus, linear addresses
+ * that use it look like this: UVPT << PDXSHIFT | UVPT << PTXSHIFT | offset
+ * Such addresses keep you at the first level of the paging tree (aka the page
+ * directory) because you loop back twice.
+ *
+ * See: https://pdos.csail.mit.edu/6.828/2016/labs/lab4/uvpt.html
  */
 extern volatile pte_t uvpt[];     // VA of "virtual page table"
 extern volatile pde_t uvpd[];     // VA of current page directory
