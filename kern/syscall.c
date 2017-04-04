@@ -190,7 +190,7 @@ sys_page_alloc(envid_t envid, void *va, int perm)
 
 // Map the page of memory at 'srcva' in srcenvid's address space
 // at 'dstva' in dstenvid's address space with permission 'perm'.
-// Allocates a new page if in the dest env if necessary (see pgdir_walk.)
+// Allocates a new page in the dest env's pgdir if necessary (see pgdir_walk.)
 // Perm has the same restrictions as in sys_page_alloc, except
 // that it also must not grant write access to a read-only
 // page.
@@ -233,6 +233,7 @@ sys_page_map(envid_t srcenvid, void *srcva,
 	struct PageInfo *p;
 	pte_t  *pte_p;
 	p = page_lookup(src_e->env_pgdir, srcva, &pte_p);
+	// cprintf("[sys_page_map] srcva: %x, dstva: %x, pte: %x\n", srcva, dstva, *pte_p);
 
 	// If caller wants to make it writable,
 	// ensure it's writable in the source mapping
@@ -240,9 +241,11 @@ sys_page_map(envid_t srcenvid, void *srcva,
 		return -E_INVAL;
 
 	// Map it into dest env's address space
-	// Note that we're not allocating a new page,
-	// simply mapping an already allocated one
-	// into a new env.
+	// Note that we're not allocating a new page
+	// (not counting a new page table page, if
+  // required in the dest env pgdir), simply
+	// mapping an already allocated one into a new env.
+
 	// Also note that we don't want to free it
 	// on failure as we did in sys_page_alloc;
 	// this page may still be used by the src env.
@@ -348,7 +351,7 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 {
 	// Call the function corresponding to the 'syscallno' parameter.
 	// Return any appropriate return value.
-	cprintf("SYSCALL: %d\n", syscallno);
+	// cprintf("SYSCALL: %d\n", syscallno);
 	switch (syscallno) {
 		case SYS_cputs:
 			sys_cputs((char *)a1, a2);
