@@ -345,13 +345,36 @@ sys_ipc_recv(void *dstva)
 	return 0;
 }
 
+static const char *syscallname(int syscallno)
+{
+	static const char * const names[] = {
+		"cputs",
+		"cgetc",
+		"getenvid",
+		"env_destroy",
+		"page_alloc",
+		"page_map",
+		"page_unmap",
+		"exofork",
+		"env_set_status",
+		"env_set_pgfault_upcall",
+		"yield",
+		"ipc_try_send",
+		"ipc_recv"
+	};
+
+	if (syscallno < sizeof(names)/sizeof(names[0]))
+		return names[syscallno];
+	return "(unknown syscall)";
+}
+
 // Dispatches to the correct kernel function, passing the arguments.
 int32_t
 syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
 {
 	// Call the function corresponding to the 'syscallno' parameter.
 	// Return any appropriate return value.
-	// cprintf("SYSCALL: %d\n", syscallno);
+	cprintf("[syscall] %d - %s\n", syscallno, syscallname(syscallno));
 	switch (syscallno) {
 		case SYS_cputs:
 			sys_cputs((char *)a1, a2);
