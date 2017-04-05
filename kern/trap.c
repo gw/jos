@@ -344,12 +344,6 @@ page_fault_handler(struct Trapframe *tf)
 		print_trapframe(tf);
 		env_destroy(curenv);  // Does not return
 	}
-	// Make sure user can write to its exception stack and that
-	// it hasn't already overflowed. Said exception stack is one
-	// page, and there's an unmapped page below it, so this test
-	// ought to cover both cases by testing whatever page contains
-	// the address at tf_esp.
-	user_mem_assert(curenv, (void *)tf->tf_esp, 1, 0);  // If fail, does not return
 
 	// Check if this fault comes from the user page fault handler--
 	// if so, push an empty word onto exception stack.
@@ -365,6 +359,13 @@ page_fault_handler(struct Trapframe *tf)
 	ux_esp -= sizeof(struct UTrapframe);
 	if (ux_esp < UXSTACKTOP - PGSIZE)
 		panic("not enough space for UTrapframe");
+
+	// Make sure user can write to its exception stack and that
+	// it hasn't already overflowed. Said exception stack is one
+	// page, and there's an unmapped page below it, so this test
+	// ought to cover both cases by testing whatever page contains
+	// the address at tf_esp.
+	user_mem_assert(curenv, (void *)ux_esp, 1, PTE_W);  // If fail, does not return
 
 	// Build the frame
 	struct UTrapframe *utf = (struct UTrapframe *)(ux_esp);
