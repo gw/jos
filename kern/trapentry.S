@@ -13,13 +13,17 @@
 
 /* TRAPHANDLER defines a globally-visible function for handling a trap.
  * It pushes a trap number onto the stack, then jumps to _alltraps.
+ * These handler functions are what get pointed at in the IDT entries,
+ * initialized in trap.c:trap_init.
  * Use TRAPHANDLER for traps where the CPU automatically pushes an error code.
  *
  * You shouldn't call a TRAPHANDLER function from C, but you may
  * need to _declare_ one in C (for instance, to get a function pointer
  * during IDT setup).  You can declare the function with
  *   void NAME();
- * where NAME is the argument passed to TRAPHANDLER.
+ * where NAME is the argument passed to TRAPHANDLER. This happens in
+ * trapentry.h, so code like that in trap.c:trap_init can set up
+ * the IDT with pointers to the handlers.
  */
 #define TRAPHANDLER(name, num)						\
 	.globl name;		/* define global symbol for 'name' */	\
@@ -63,6 +67,15 @@ TRAPHANDLER_NOEC(th16, T_FPERR)
 TRAPHANDLER(th17, T_ALIGN)
 TRAPHANDLER_NOEC(th18, T_MCHK)
 TRAPHANDLER_NOEC(th19, T_SIMDERR)
+
+# Hardware interrupts
+TRAPHANDLER_NOEC(th32, IRQ_OFFSET + IRQ_TIMER)
+TRAPHANDLER_NOEC(th33, IRQ_OFFSET + IRQ_KBD)
+TRAPHANDLER_NOEC(th36, IRQ_OFFSET + IRQ_SERIAL)
+TRAPHANDLER_NOEC(th39, IRQ_OFFSET + IRQ_SPURIOUS)
+TRAPHANDLER_NOEC(th46, IRQ_OFFSET + IRQ_IDE)
+TRAPHANDLER_NOEC(th51, IRQ_OFFSET + IRQ_ERROR)
+
 TRAPHANDLER_NOEC(th48, T_SYSCALL)
 
 _alltraps:

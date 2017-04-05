@@ -93,6 +93,14 @@ trap_init(void)
 	SETGATE(idt[T_ALIGN], 0, GD_KT, th17, 0);
 	SETGATE(idt[T_MCHK], 0, GD_KT, th18, 0);
 	SETGATE(idt[T_SIMDERR], 0, GD_KT, th19, 0);
+	// Hardware interrupts
+	SETGATE(idt[IRQ_OFFSET + IRQ_TIMER], 0, GD_KT, th32, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_KBD], 0, GD_KT, th33, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_SERIAL], 0, GD_KT, th36, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_SPURIOUS], 0, GD_KT, th39, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_IDE], 0, GD_KT, th46, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_ERROR], 0, GD_KT, th51, 0);
+
 	// User. Interrupt 0x30 cannot be generated
 	// by hardware so there's no ambiguity in
 	// allowing user code to trigger it.
@@ -217,6 +225,7 @@ trap_dispatch(struct Trapframe *tf)
 	if (tf->tf_cs == GD_KT)
 		panic("unhandled trap in kernel");
 	else {
+		cprintf("unhandled trap in userland\n");
 		env_destroy(curenv);
 		return;
 	}
