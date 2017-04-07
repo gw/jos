@@ -53,7 +53,7 @@ _kaddr(const char *file, int line, physaddr_t pa)
 
 enum {
 	// For page_alloc, zero the returned physical page.
-	ALLOC_ZERO = 1<<0,
+	ALLOC_ZERO = 1<<0,  // TODO what's the point of shifting this 0?
 };
 
 void	mem_init(void);
@@ -67,6 +67,8 @@ struct PageInfo *page_lookup(pde_t *pgdir, void *va, pte_t **pte_store);
 void	page_decref(struct PageInfo *pp);
 
 void	tlb_invalidate(pde_t *pgdir, void *va);
+
+void *	mmio_map_region(physaddr_t pa, size_t size);
 
 int	user_mem_check(struct Env *env, const void *va, size_t len, int perm);
 void	user_mem_assert(struct Env *env, const void *va, size_t len, int perm);

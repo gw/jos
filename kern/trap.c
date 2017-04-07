@@ -9,6 +9,11 @@
 #include <kern/monitor.h>
 #include <kern/env.h>
 #include <kern/syscall.h>
+#include <kern/sched.h>
+#include <kern/kclock.h>
+#include <kern/picirq.h>
+#include <kern/cpu.h>
+#include <kern/spinlock.h>
 
 static struct Taskstate ts;
 
@@ -56,6 +61,8 @@ static const char *trapname(int trapno)
 		return excnames[trapno];
 	if (trapno == T_SYSCALL)
 		return "System call";
+	if (trapno >= IRQ_OFFSET && trapno < IRQ_OFFSET + 16)
+		return "Hardware Interrupt";
 	return "(unknown trap)";
 }
 
@@ -86,6 +93,14 @@ trap_init(void)
 	SETGATE(idt[T_ALIGN], 0, GD_KT, th17, 0);
 	SETGATE(idt[T_MCHK], 0, GD_KT, th18, 0);
 	SETGATE(idt[T_SIMDERR], 0, GD_KT, th19, 0);
+	// Hardware interrupts
+	SETGATE(idt[IRQ_OFFSET + IRQ_TIMER], 0, GD_KT, th32, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_KBD], 0, GD_KT, th33, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_SERIAL], 0, GD_KT, th36, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_SPURIOUS], 0, GD_KT, th39, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_IDE], 0, GD_KT, th46, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_ERROR], 0, GD_KT, th51, 0);
+
 	// User. Interrupt 0x30 cannot be generated
 	// by hardware so there's no ambiguity in
 	// allowing user code to trigger it.
@@ -95,23 +110,28 @@ trap_init(void)
 	trap_init_percpu();
 }
 
-// Initialize and load the per-CPU TSS and IDT
+// Initialize and load the per-CPU TSS and IDT. Runs once
+// on each CPU.
 void
 trap_init_percpu(void)
 {
-	// Setup a TSS so that we get the right stack
-	// when we trap to the kernel.
-	ts.ts_esp0 = KSTACKTOP;
-	ts.ts_ss0 = GD_KD;
+	int cpu_id = cpunum();
+	thiscpu->cpu_ts.ts_esp0 = (uintptr_t) percpu_kstacks[cpu_id];
+	thiscpu->cpu_ts.ts_ss0 = GD_KD;
 
 	// Initialize the TSS slot of the gdt.
-	gdt[GD_TSS0 >> 3] = SEG16(STS_T32A, (uint32_t) (&ts),
+	gdt[(GD_TSS0 >> 3) + cpu_id] = SEG16(STS_T32A, (uint32_t) &thiscpu->cpu_ts,
 					sizeof(struct Taskstate) - 1, 0);
-	gdt[GD_TSS0 >> 3].sd_s = 0;
+	gdt[(GD_TSS0 >> 3) + cpu_id].sd_s = 0;
 
+	// ltr sets a 'busy' flag in the TSS selector, so if you
+	// accidentally load the same TSS on more than one CPU, you'll
+	// get a triple fault.  If you set up an individual CPU's TSS
+	// wrong, you may not get a fault until you try to return from
+	// user space on that CPU.
 	// Load the TSS selector (like other segment selectors, the
 	// bottom three bits are special; we leave them 0)
-	ltr(GD_TSS0);
+	ltr(GD_TSS0 + (cpu_id * sizeof(struct Segdesc)));
 
 	// Load the IDT
 	lidt(&idt_pd);
@@ -120,7 +140,7 @@ trap_init_percpu(void)
 void
 print_trapframe(struct Trapframe *tf)
 {
-	cprintf("TRAP frame at %p\n", tf);
+	cprintf("TRAP frame at %p from CPU %d\n", tf, cpunum());
 	print_regs(&tf->tf_regs);
 	cprintf("  es   0x----%04x\n", tf->tf_es);
 	cprintf("  ds   0x----%04x\n", tf->tf_ds);
@@ -187,11 +207,29 @@ trap_dispatch(struct Trapframe *tf)
 			return;
 	}
 
+	// Handle spurious interrupts
+	// The hardware sometimes raises these because of noise on the
+	// IRQ line or other reasons. We don't care.
+	if (tf->tf_trapno == IRQ_OFFSET + IRQ_SPURIOUS) {
+		cprintf("Spurious interrupt on irq 7\n");
+		print_trapframe(tf);
+		return;
+	}
+
+	// Handle clock interrupts. Don't forget to acknowledge the
+	// interrupt using lapic_eoi() before calling the scheduler!
+	if (tf->tf_trapno == IRQ_OFFSET + IRQ_TIMER) {
+		cprintf("Timer interrupt\n");
+		lapic_eoi();
+		sched_yield();  // Does not return
+	}
+
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);
 	if (tf->tf_cs == GD_KT)
 		panic("unhandled trap in kernel");
 	else {
+		cprintf("unhandled trap in userland\n");
 		env_destroy(curenv);
 		return;
 	}
@@ -204,16 +242,40 @@ trap(struct Trapframe *tf)
 	// of GCC rely on DF being clear
 	asm volatile("cld" ::: "cc");
 
+	// Halt the CPU if some other CPU has called panic()
+	extern char *panicstr;
+	if (panicstr)
+		asm volatile("hlt");
+
+	// Re-acqurie the big kernel lock if we were halted in
+	// sched_yield()
+	if (xchg(&thiscpu->cpu_status, CPU_STARTED) == CPU_HALTED)
+		lock_kernel();
 	// Check that interrupts are disabled.  If this assertion
 	// fails, DO NOT be tempted to fix it by inserting a "cli" in
 	// the interrupt path.
 	assert(!(read_eflags() & FL_IF));
 
-	cprintf("Incoming TRAP frame at %p, trapno %d\n", tf, tf->tf_trapno);
+	cprintf("Incoming TRAP frame at %p: %d - %s\n",
+		tf,
+		tf->tf_trapno,
+		trapname(tf->tf_trapno)
+	);
 
 	if ((tf->tf_cs & 3) == 3) {
 		// Trapped from user mode.
+		// Acquire the big kernel lock before doing any
+		// serious kernel work.
+		lock_kernel();
+
 		assert(curenv);
+
+		// Garbage collect if current enviroment is a zombie
+		if (curenv->env_status == ENV_DYING) {
+			env_free(curenv);
+			curenv = NULL;
+			sched_yield();
+		}
 
 		// Copy trap frame (which is currently on the stack)
 		// into 'curenv->env_tf', so that running the environment
@@ -230,9 +292,13 @@ trap(struct Trapframe *tf)
 	// Dispatch based on what type of trap occurred
 	trap_dispatch(tf);
 
-	// Return to the current environment, which should be running.
-	assert(curenv && curenv->env_status == ENV_RUNNING);
-	env_run(curenv);
+	// If we made it to this point, then no other environment was
+	// scheduled, so we should return to the current environment
+	// if doing so makes sense.
+	if (curenv && curenv->env_status == ENV_RUNNING)
+		env_run(curenv);
+	else
+		sched_yield();
 }
 
 
@@ -251,9 +317,68 @@ page_fault_handler(struct Trapframe *tf)
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
 
-	// Destroy the environment that caused the fault.
-	cprintf("[%08x] user fault va %08x ip %08x\n",
-		curenv->env_id, fault_va, tf->tf_eip);
-	print_trapframe(tf);
-	env_destroy(curenv);
+	// Call the environment's page fault upcall, if one exists.  Set up a
+	// page fault stack frame on the user exception stack (below
+	// UXSTACKTOP), then branch to curenv->env_pgfault_upcall.
+	//
+	// The page fault upcall might cause another page fault, in which case
+	// we branch to the page fault upcall recursively, pushing another
+	// page fault stack frame on top of the user exception stack.
+	//
+	// The trap handler needs one word of scratch space at the top of the
+	// trap-time stack in order to return.  In the non-recursive case, we
+	// don't have to worry about this because the top of the regular user
+	// stack is free.  In the recursive case, this means we have to leave
+	// an extra word between the current top of the exception stack and
+	// the new stack frame because the exception stack _is_ the trap-time
+	// stack.
+	//
+	// If there's no page fault upcall, the environment didn't allocate a
+	// page for its exception stack or can't write to it, or the exception
+	// stack overflows, then destroy the environment that caused the fault.
+
+	// Check if user set up a page fault handler. If not, destroy.
+	if (!curenv->env_pgfault_upcall) {
+		cprintf("[%08x] user fault va %08x ip %08x -- no upcall\n",
+			curenv->env_id, fault_va, tf->tf_eip);
+		print_trapframe(tf);
+		env_destroy(curenv);  // Does not return
+	}
+
+	// Check if this fault comes from the user page fault handler--
+	// if so, push an empty word onto exception stack.
+	uintptr_t ux_esp;  // Pointer to top of user exception stack
+	if (tf->tf_esp >= UXSTACKTOP - PGSIZE && tf->tf_esp < UXSTACKTOP)
+		// tf_esp is already in the user exception stack.
+		ux_esp = tf->tf_esp - 4;
+	else
+		ux_esp = UXSTACKTOP;
+
+	// Push a UTrapframe onto the exception stack
+	// Make sure we have enough space
+	ux_esp -= sizeof(struct UTrapframe);
+	if (ux_esp < UXSTACKTOP - PGSIZE)
+		panic("not enough space for UTrapframe");
+
+	// Make sure user can write to its exception stack and that
+	// it hasn't already overflowed. Said exception stack is one
+	// page, and there's an unmapped page below it, so this test
+	// ought to cover both cases by testing whatever page contains
+	// the address at tf_esp.
+	user_mem_assert(curenv, (void *)ux_esp, 1, PTE_W);  // If fail, does not return
+
+	// Build the frame
+	struct UTrapframe *utf = (struct UTrapframe *)(ux_esp);
+	utf->utf_fault_va = fault_va;
+	utf->utf_err = tf->tf_err;
+	utf->utf_regs = tf->tf_regs;
+	utf->utf_eip = tf->tf_eip;
+	utf->utf_eflags = tf->tf_eflags;
+	utf->utf_esp = tf->tf_esp;
+
+	// Modify curenv to execute at its page fault handler
+	// using the exception stack, and run it.
+	tf->tf_eip = (uintptr_t)curenv->env_pgfault_upcall;
+	tf->tf_esp = ux_esp;
+	env_run(curenv);
 }

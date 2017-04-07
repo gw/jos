@@ -193,6 +193,9 @@ memmove(void *dst, const void *src, size_t n)
 	s = src;
 	d = dst;
 	if (s < d && s + n > d) {
+		// Source and dest regions overlap.
+		// Copy backwards so you don't overwrite
+		// source data.
 		s += n;
 		d += n;
 		while (n-- > 0)

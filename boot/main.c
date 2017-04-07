@@ -35,6 +35,9 @@
 void readsect(void*, uint32_t);
 void readseg(uint32_t, uint32_t, uint32_t);
 
+/**
+* Minimal ELF loader
+*/
 void
 bootmain(void)
 {
