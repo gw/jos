@@ -194,6 +194,8 @@ sys_page_alloc(envid_t envid, void *va, int perm)
 // Perm has the same restrictions as in sys_page_alloc, except
 // that it also must not grant write access to a read-only
 // page.
+// If `check` is true, makes sure current env is allowed to modify
+// both the src and dst envs.
 //
 // Return 0 on success, < 0 on error.  Errors are:
 //	-E_BAD_ENV if srcenvid and/or dstenvid doesn't currently exist,
@@ -207,7 +209,7 @@ sys_page_alloc(envid_t envid, void *va, int perm)
 //	-E_NO_MEM if there's no memory to allocate any necessary page tables.
 static int
 sys_page_map(envid_t srcenvid, void *srcva,
-	     			 envid_t dstenvid, void *dstva, int perm)
+	     			 envid_t dstenvid, void *dstva, int perm, bool check)
 {
 	// Check source and dest addresses
 	if ((uint32_t)srcva >= UTOP || (uint32_t)srcva % PGSIZE != 0)
@@ -224,9 +226,9 @@ sys_page_map(envid_t srcenvid, void *srcva,
 	int err;
 	struct Env *src_e;
 	struct Env *dest_e;
-	if (err = envid2env(srcenvid, &src_e, 1))
+	if (err = envid2env(srcenvid, &src_e, check))
 		return err;
-	if (err = envid2env(dstenvid, &dest_e, 1))
+	if (err = envid2env(dstenvid, &dest_e, check))
 		return err;
 
 	// Look up source page
@@ -333,7 +335,7 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 	if ((uintptr_t)srcva < UTOP && (uintptr_t)e->env_ipc_dstva < UTOP) {
 		// Sender has given a potentially valid address
 		// and receiver is asking for a page mapping
-		if (r = sys_page_map(curenv->env_id, srcva, envid, e->env_ipc_dstva, perm))
+		if (r = sys_page_map(curenv->env_id, srcva, envid, e->env_ipc_dstva, perm, false))
 			return r;
 		e->env_ipc_perm = perm;
 	} else {
@@ -446,7 +448,7 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 			return sys_page_alloc(a1, (void *)a2, a3);
 
 		case SYS_page_map:
-			return sys_page_map(a1, (void *)a2, a3, (void *)a4, a5);
+			return sys_page_map(a1, (void *)a2, a3, (void *)a4, a5, true);
 
 		case SYS_page_unmap:
 			return sys_page_unmap(a1, (void *)a2);

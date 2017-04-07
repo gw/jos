@@ -28,4 +28,3 @@ umain(int argc, char **argv)
 	cprintf("I am the parent.  Killing the child...\n");
 	sys_env_destroy(env);
 }
-
